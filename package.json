@@ -1,0 +1,28 @@
+{
+  "name": "ws_plugin_market_ops",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Studio market operations plugin for vendor and market workflows.",
+  "keywords": [
+    "wayfind-studio-plugin",
+    "market",
+    "operations"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/WayfindEntertainment/ws_plugin_market_ops.git"
+  },
+  "bugs": {
+    "url": "https://github.com/WayfindEntertainment/ws_plugin_market_ops/issues"
+  },
+  "homepage": "https://github.com/WayfindEntertainment/ws_plugin_market_ops#readme",
+  "license": "GPL-2.0-or-later",
+  "author": "Wayfind Entertainment LLC",
+  "studio": {
+    "kind": "plugin",
+    "apiVersion": 1,
+    "displayName": "Market Operations",
+    "icon": "./icon.svg",
+    "requiresPlugins": []
+  }
+}

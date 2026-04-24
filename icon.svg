@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+    <title>Market Operations Icon</title>
+    <rect width="128" height="128" rx="24" fill="#1f4d3b" />
+    <path d="M24 44h80l-6 18H30z" fill="#f4e8c1" />
+    <path d="M34 62h60v30H34z" fill="#fffaf0" />
+    <path d="M44 72h16v20H44z" fill="#d97706" />
+    <path d="M68 72h16v12H68z" fill="#1f4d3b" />
+    <path d="M28 40l8-16h56l8 16z" fill="#d97706" />
+</svg>
