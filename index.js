@@ -41,7 +41,22 @@ const marketOpsPlugin = {
         ]
     },
     jobs: null,
-    schema: null
+    schema: {
+        migrations: [
+            'migrations/001_create_market_ops_vendor_businesses.sql',
+            'migrations/002_create_market_ops_vendor_business_owners.sql',
+            'migrations/003_create_market_ops_vendor_product_categories.sql',
+            'migrations/004_create_market_ops_vendor_business_product_categories.sql',
+            'migrations/005_create_market_ops_locations.sql',
+            'migrations/006_create_market_ops_market_groups.sql',
+            'migrations/007_create_market_ops_markets.sql',
+            'migrations/008_create_market_ops_booth_types.sql',
+            'migrations/009_create_market_ops_market_booth_offerings.sql',
+            'migrations/010_create_market_ops_vendor_market_applications.sql',
+            'migrations/011_create_market_ops_application_market_selections.sql',
+            'migrations/012_create_market_ops_application_market_booth_preferences.sql'
+        ]
+    }
 }
 
 export default marketOpsPlugin
