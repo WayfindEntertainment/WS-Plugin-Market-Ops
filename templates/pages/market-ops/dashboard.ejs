@@ -1,0 +1,276 @@
+<%
+    const dashboard = marketOpsDashboardPageData || {
+        counts: {
+            locationCount: 0,
+            marketGroupCount: 0,
+            marketCount: 0,
+            boothTypeCount: 0
+        },
+        locations: [],
+        marketGroups: [],
+        boothTypes: []
+    }
+    const formValues = marketOpsBoothTypeFormValues || {}
+    const helpers = marketOpsHelpers || {}
+    const isChecked = typeof helpers.isCheckedValue === 'function' ? helpers.isCheckedValue : (() => false)
+%>
+
+<div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+    <div>
+        <h1 class="h3 m-0">Market Ops</h1>
+        <p class="text-body-secondary mb-0">
+            Configure the operational foundation for locations, market groups, schedules, and booth inventory.
+        </p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-outline-primary" href="/market-ops/locations/create">New Location</a>
+        <a class="btn btn-primary" href="/market-ops/market-groups/create">New Market Group</a>
+    </div>
+</div>
+
+<%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash }) %>
+
+<section class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <p class="text-uppercase small text-body-secondary mb-2">Locations</p>
+                <div class="display-6 mb-0"><%= dashboard.counts.locationCount %></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <p class="text-uppercase small text-body-secondary mb-2">Market Groups</p>
+                <div class="display-6 mb-0"><%= dashboard.counts.marketGroupCount %></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <p class="text-uppercase small text-body-secondary mb-2">Markets</p>
+                <div class="display-6 mb-0"><%= dashboard.counts.marketCount %></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <p class="text-uppercase small text-body-secondary mb-2">Booth Types</p>
+                <div class="display-6 mb-0"><%= dashboard.counts.boothTypeCount %></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="row g-4">
+    <div class="col-12 col-xl-7">
+        <div class="card mb-4">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <div>
+                    <h2 class="h5 mb-1">Recent Market Groups</h2>
+                    <p class="text-body-secondary small mb-0">Build the season first, then add the dated markets inside it.</p>
+                </div>
+                <a class="btn btn-sm btn-outline-primary" href="/market-ops/market-groups">View All</a>
+            </div>
+            <div class="card-body p-0">
+                <% if (dashboard.marketGroups.length === 0) { %>
+                    <div class="p-4 text-body-secondary">No market groups yet. Start with one season or campaign grouping.</div>
+                <% } else { %>
+                    <div class="list-group list-group-flush">
+                        <% for (const marketGroup of dashboard.marketGroups) { %>
+                            <a
+                                class="list-group-item list-group-item-action d-flex flex-column flex-lg-row justify-content-between gap-2"
+                                href="/market-ops/market-groups/<%= marketGroup.marketGroupId %>"
+                            >
+                                <div>
+                                    <div class="fw-semibold"><%= marketGroup.groupName %></div>
+                                    <div class="small text-body-secondary">
+                                        Fee mode: <%= marketGroup.feeMode %>
+                                        <% if (marketGroup.feeAmountCents > 0) { %>
+                                            · $<%= (marketGroup.feeAmountCents / 100).toFixed(2) %>
+                                        <% } %>
+                                    </div>
+                                </div>
+                                <div class="text-body-secondary small">
+                                    <%= marketGroup.marketCount %> market<%= marketGroup.marketCount === 1 ? '' : 's' %>
+                                </div>
+                            </a>
+                        <% } %>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <div>
+                    <h2 class="h5 mb-1">Recent Locations</h2>
+                    <p class="text-body-secondary small mb-0">Keep location records clean so markets can reuse them confidently.</p>
+                </div>
+                <a class="btn btn-sm btn-outline-primary" href="/market-ops/locations">View All</a>
+            </div>
+            <div class="card-body p-0">
+                <% if (dashboard.locations.length === 0) { %>
+                    <div class="p-4 text-body-secondary">No locations yet. Add the spaces where markets can take place.</div>
+                <% } else { %>
+                    <div class="list-group list-group-flush">
+                        <% for (const location of dashboard.locations) { %>
+                            <a
+                                class="list-group-item list-group-item-action d-flex flex-column gap-1"
+                                href="/market-ops/locations/<%= location.locationId %>"
+                            >
+                                <div class="fw-semibold"><%= location.locationName %></div>
+                                <div class="small text-body-secondary">
+                                    <%= location.slug %>
+                                    <% if (location.city || location.stateCode) { %>
+                                        · <%= [location.city, location.stateCode].filter(Boolean).join(', ') %>
+                                    <% } %>
+                                </div>
+                            </a>
+                        <% } %>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xl-5">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="h5 mb-1">Create Booth Type</h2>
+                <p class="text-body-secondary small mb-0">
+                    Define the reusable booth formats you can later assign to individual markets.
+                </p>
+            </div>
+            <div class="card-body">
+                <form action="/market-ops/booth-types" method="post" class="row g-3">
+                    <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="dashboard-booth-type-label">Label</label>
+                        <input
+                            id="dashboard-booth-type-label"
+                            class="form-control"
+                            type="text"
+                            name="label"
+                            value="<%= formValues.label || '' %>"
+                            required
+                        />
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="dashboard-booth-type-slug">Slug</label>
+                        <input
+                            id="dashboard-booth-type-slug"
+                            class="form-control"
+                            type="text"
+                            name="slug"
+                            value="<%= formValues.slug || '' %>"
+                            required
+                        />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="dashboard-booth-type-description">Description</label>
+                        <textarea
+                            id="dashboard-booth-type-description"
+                            class="form-control"
+                            rows="3"
+                            name="description"
+                        ><%= formValues.description || '' %></textarea>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="dashboard-booth-type-sort-order">Sort Order</label>
+                        <input
+                            id="dashboard-booth-type-sort-order"
+                            class="form-control"
+                            type="number"
+                            min="0"
+                            name="sortOrder"
+                            value="<%= formValues.sortOrder || '0' %>"
+                            required
+                        />
+                    </div>
+                    <div class="col-12 col-md-6 d-flex align-items-end">
+                        <div class="form-check mb-2">
+                            <input
+                                id="dashboard-booth-type-is-active"
+                                class="form-check-input"
+                                type="checkbox"
+                                name="isActive"
+                                value="1"
+                                <%= isChecked(formValues.isActive) ? 'checked' : '' %>
+                            />
+                            <label class="form-check-label" for="dashboard-booth-type-is-active">
+                                Active and available
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <button class="btn btn-primary" type="submit">Create Booth Type</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2 class="h5 mb-1">Booth Type Library</h2>
+                <p class="text-body-secondary small mb-0">Update reusable booth labels and availability.</p>
+            </div>
+            <div class="card-body">
+                <% if (dashboard.boothTypes.length === 0) { %>
+                    <p class="text-body-secondary mb-0">No booth types yet.</p>
+                <% } else { %>
+                    <div class="d-flex flex-column gap-3">
+                        <% for (const boothType of dashboard.boothTypes) { %>
+                            <form
+                                class="border rounded p-3"
+                                action="/market-ops/booth-types/<%= boothType.boothTypeId %>"
+                                method="post"
+                            >
+                                <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                                <div class="row g-3">
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label">Label</label>
+                                        <input class="form-control" type="text" name="label" value="<%= boothType.label %>" required />
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label">Slug</label>
+                                        <input class="form-control" type="text" name="slug" value="<%= boothType.slug %>" required />
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Description</label>
+                                        <textarea class="form-control" rows="2" name="description"><%= boothType.description || '' %></textarea>
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label">Sort Order</label>
+                                        <input class="form-control" type="number" min="0" name="sortOrder" value="<%= boothType.sortOrder %>" required />
+                                    </div>
+                                    <div class="col-12 col-md-4 d-flex align-items-end">
+                                        <div class="form-check mb-2">
+                                            <input
+                                                id="booth-type-active-<%= boothType.boothTypeId %>"
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                name="isActive"
+                                                value="1"
+                                                <%= boothType.isActive === 1 ? 'checked' : '' %>
+                                            />
+                                            <label class="form-check-label" for="booth-type-active-<%= boothType.boothTypeId %>">
+                                                Active
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-12 col-md-4 d-flex align-items-end">
+                                        <button class="btn btn-outline-primary w-100" type="submit">Save</button>
+                                    </div>
+                                </div>
+                            </form>
+                        <% } %>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+    </div>
+</section>

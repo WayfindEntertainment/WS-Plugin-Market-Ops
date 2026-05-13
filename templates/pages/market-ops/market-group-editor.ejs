@@ -1,0 +1,122 @@
+<%
+    const editor = marketOpsMarketGroupEditor || {}
+    const formValues = editor.formValues || {}
+    const marketGroup = editor.marketGroup || null
+    const mode = editor.mode || 'create'
+    const markets = Array.isArray(editor.markets) ? editor.markets : []
+    const feeModeOptions = Array.isArray(editor.feeModeOptions) ? editor.feeModeOptions : []
+%>
+
+<div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+    <div>
+        <a class="text-decoration-none small d-inline-block mb-2" href="/market-ops/market-groups">Back to Market Groups</a>
+        <h1 class="h3 m-0"><%= mode === 'create' ? 'Create Market Group' : (marketGroup?.groupName || 'Edit Market Group') %></h1>
+        <p class="text-body-secondary mb-0">
+            Group related markets together so application windows, fee rules, and public routing stay coherent.
+        </p>
+    </div>
+    <% if (mode === 'edit' && marketGroup) { %>
+        <a class="btn btn-primary" href="/market-ops/market-groups/<%= marketGroup.marketGroupId %>/markets/create">Add Market</a>
+    <% } %>
+</div>
+
+<%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash: editor.flash }) %>
+
+<section class="row g-4">
+    <div class="col-12 <%= mode === 'edit' ? 'col-xxl-7' : 'col-xxl-8' %>">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="h5 mb-1">Group Details</h2>
+                <p class="text-body-secondary small mb-0">These settings apply to the overall group and shape downstream application behavior.</p>
+            </div>
+            <div class="card-body">
+                <form action="<%= editor.formAction %>" method="post" class="row g-3">
+                    <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="market-group-name">Group Name</label>
+                        <input id="market-group-name" class="form-control" type="text" name="groupName" value="<%= formValues.groupName || '' %>" required />
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="market-group-slug">Slug</label>
+                        <input id="market-group-slug" class="form-control" type="text" name="slug" value="<%= formValues.slug || '' %>" required />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="market-group-summary">Summary</label>
+                        <textarea id="market-group-summary" class="form-control" rows="2" name="summary"><%= formValues.summary || '' %></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="market-group-description">Description</label>
+                        <textarea id="market-group-description" class="form-control" rows="5" name="description"><%= formValues.description || '' %></textarea>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="market-group-fee-mode">Fee Mode</label>
+                        <select id="market-group-fee-mode" class="form-select" name="feeMode">
+                            <% for (const option of feeModeOptions) { %>
+                                <option value="<%= option.value %>" <%= option.value === formValues.feeMode ? 'selected' : '' %>>
+                                    <%= option.label %>
+                                </option>
+                            <% } %>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="market-group-fee-amount">Fee Amount (Cents)</label>
+                        <input id="market-group-fee-amount" class="form-control" type="number" min="0" name="feeAmountCents" value="<%= formValues.feeAmountCents || '0' %>" required />
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input
+                                id="market-group-is-public"
+                                class="form-check-input"
+                                type="checkbox"
+                                name="isPublic"
+                                value="1"
+                                <%= formValues.isPublic === '1' ? 'checked' : '' %>
+                            />
+                            <label class="form-check-label" for="market-group-is-public">
+                                Publicly visible
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <button class="btn btn-primary" type="submit">
+                            <%= mode === 'create' ? 'Create Market Group' : 'Save Market Group' %>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <% if (mode === 'edit' && marketGroup) { %>
+        <div class="col-12 col-xxl-5">
+            <div class="card">
+                <div class="card-header d-flex align-items-center justify-content-between gap-3">
+                    <div>
+                        <h2 class="h5 mb-1">Markets in This Group</h2>
+                        <p class="text-body-secondary small mb-0">Each dated market inherits the group context but keeps its own setup.</p>
+                    </div>
+                    <a class="btn btn-sm btn-outline-primary" href="/market-ops/market-groups/<%= marketGroup.marketGroupId %>/markets/create">Add Market</a>
+                </div>
+                <div class="card-body p-0">
+                    <% if (markets.length === 0) { %>
+                        <div class="p-4 text-body-secondary">No markets in this group yet.</div>
+                    <% } else { %>
+                        <div class="list-group list-group-flush">
+                            <% for (const market of markets) { %>
+                                <a
+                                    class="list-group-item list-group-item-action d-flex flex-column gap-1"
+                                    href="/market-ops/market-groups/<%= marketGroup.marketGroupId %>/markets/<%= market.marketId %>"
+                                >
+                                    <div class="fw-semibold"><%= market.marketName %></div>
+                                    <div class="small text-body-secondary">
+                                        <%= market.slug %> · <%= ws_dt.format(market.startsAt) %>
+                                    </div>
+                                </a>
+                            <% } %>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    <% } %>
+</section>

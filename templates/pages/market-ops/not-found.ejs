@@ -1,0 +1,19 @@
+<%
+    const notFound = marketOpsNotFound || {
+        title: 'Not Found',
+        description: 'That Market Ops page could not be found.'
+    }
+%>
+
+<section class="row justify-content-center">
+    <div class="col-12 col-lg-8 col-xl-6">
+        <div class="card">
+            <div class="card-body p-4 p-lg-5 text-center">
+                <p class="text-uppercase text-body-secondary small mb-2">Market Ops</p>
+                <h1 class="h3 mb-3"><%= notFound.title %></h1>
+                <p class="text-body-secondary mb-4"><%= notFound.description %></p>
+                <a class="btn btn-primary" href="/market-ops">Back to Market Ops</a>
+            </div>
+        </div>
+    </div>
+</section>

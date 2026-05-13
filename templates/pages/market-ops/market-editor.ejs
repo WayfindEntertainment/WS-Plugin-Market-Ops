@@ -1,0 +1,245 @@
+<%
+    const editor = marketOpsMarketEditor || {}
+    const market = editor.market || null
+    const marketGroup = editor.marketGroup || null
+    const locations = Array.isArray(editor.locations) ? editor.locations : []
+    const boothTypes = Array.isArray(editor.boothTypes) ? editor.boothTypes : []
+    const boothOfferings = Array.isArray(editor.boothOfferings) ? editor.boothOfferings : []
+    const formValues = editor.formValues || {}
+    const offeringFormValues = editor.offeringFormValues || {}
+    const helpers = editor.helpers || {}
+    const isChecked = typeof helpers.isCheckedValue === 'function' ? helpers.isCheckedValue : (() => false)
+%>
+
+<div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+    <div>
+        <a class="text-decoration-none small d-inline-block mb-2" href="/market-ops/market-groups/<%= marketGroup?.marketGroupId || '' %>">Back to Market Group</a>
+        <h1 class="h3 m-0"><%= editor.mode === 'create' ? 'Create Market' : (market?.marketName || 'Edit Market') %></h1>
+        <p class="text-body-secondary mb-0">
+            Schedule the individual market date, location, visibility, and booth inventory.
+        </p>
+    </div>
+</div>
+
+<%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash: editor.flash }) %>
+
+<section class="row g-4">
+    <div class="col-12 <%= editor.mode === 'edit' ? 'col-xxl-7' : 'col-xxl-8' %>">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="h5 mb-1">Market Details</h2>
+                <p class="text-body-secondary small mb-0">
+                    Parent group: <strong><%= marketGroup?.groupName || 'Unknown Group' %></strong>
+                </p>
+            </div>
+            <div class="card-body">
+                <form action="<%= editor.marketFormAction %>" method="post" class="row g-3">
+                    <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="market-name">Market Name</label>
+                        <input id="market-name" class="form-control" type="text" name="marketName" value="<%= formValues.marketName || '' %>" required />
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="market-slug">Slug</label>
+                        <input id="market-slug" class="form-control" type="text" name="slug" value="<%= formValues.slug || '' %>" required />
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="market-location">Location</label>
+                        <select id="market-location" class="form-select" name="locationId" required>
+                            <option value="">Choose a location</option>
+                            <% for (const locationOption of locations) { %>
+                                <option value="<%= locationOption.locationId %>" <%= String(locationOption.locationId) === String(formValues.locationId || '') ? 'selected' : '' %>>
+                                    <%= locationOption.locationName %>
+                                </option>
+                            <% } %>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="market-fee-amount">Application Fee Override (Cents)</label>
+                        <input id="market-fee-amount" class="form-control" type="number" min="0" name="feeAmountCents" value="<%= formValues.feeAmountCents || '0' %>" required />
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="market-starts-at">Starts At</label>
+                        <input id="market-starts-at" class="form-control" type="datetime-local" name="startsAtInput" value="<%= formValues.startsAtInput || '' %>" required />
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="market-ends-at">Ends At</label>
+                        <input id="market-ends-at" class="form-control" type="datetime-local" name="endsAtInput" value="<%= formValues.endsAtInput || '' %>" required />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="market-summary">Summary</label>
+                        <textarea id="market-summary" class="form-control" rows="2" name="summary"><%= formValues.summary || '' %></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="market-description">Description</label>
+                        <textarea id="market-description" class="form-control" rows="5" name="description"><%= formValues.description || '' %></textarea>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check mb-2">
+                            <input
+                                id="market-applications-open"
+                                class="form-check-input"
+                                type="checkbox"
+                                name="applicationsOpen"
+                                value="1"
+                                <%= isChecked(formValues.applicationsOpen) ? 'checked' : '' %>
+                            />
+                            <label class="form-check-label" for="market-applications-open">
+                                Applications are open for this market
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="market-applications-open-at">Applications Open At</label>
+                        <input id="market-applications-open-at" class="form-control" type="datetime-local" name="applicationsOpenAtInput" value="<%= formValues.applicationsOpenAtInput || '' %>" />
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="market-applications-close-at">Applications Close At</label>
+                        <input id="market-applications-close-at" class="form-control" type="datetime-local" name="applicationsCloseAtInput" value="<%= formValues.applicationsCloseAtInput || '' %>" />
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input
+                                id="market-is-public"
+                                class="form-check-input"
+                                type="checkbox"
+                                name="isPublic"
+                                value="1"
+                                <%= isChecked(formValues.isPublic) ? 'checked' : '' %>
+                            />
+                            <label class="form-check-label" for="market-is-public">
+                                Publicly visible
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <button class="btn btn-primary" type="submit">
+                            <%= editor.mode === 'create' ? 'Create Market' : 'Save Market' %>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <% if (editor.mode === 'edit' && market) { %>
+        <div class="col-12 col-xxl-5">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="h5 mb-1">Add Booth Offering</h2>
+                    <p class="text-body-secondary small mb-0">Attach the booth formats available at this specific market.</p>
+                </div>
+                <div class="card-body">
+                    <form action="<%= editor.offeringCreateAction %>" method="post" class="row g-3">
+                        <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                        <div class="col-12">
+                            <label class="form-label" for="market-offering-booth-type">Booth Type</label>
+                            <select id="market-offering-booth-type" class="form-select" name="boothTypeId" required>
+                                <option value="">Choose a booth type</option>
+                                <% for (const boothType of boothTypes) { %>
+                                    <option value="<%= boothType.boothTypeId %>" <%= String(boothType.boothTypeId) === String(offeringFormValues.boothTypeId || '') ? 'selected' : '' %>>
+                                        <%= boothType.label %>
+                                    </option>
+                                <% } %>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label" for="market-offering-booth-number">Booth Number</label>
+                            <input id="market-offering-booth-number" class="form-control" type="number" min="1" name="boothNumber" value="<%= offeringFormValues.boothNumber || '' %>" required />
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label" for="market-offering-price">Price (Cents)</label>
+                            <input id="market-offering-price" class="form-control" type="number" min="0" name="priceCents" value="<%= offeringFormValues.priceCents || '0' %>" required />
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label" for="market-offering-sort-order">Sort Order</label>
+                            <input id="market-offering-sort-order" class="form-control" type="number" min="0" name="sortOrder" value="<%= offeringFormValues.sortOrder || '0' %>" required />
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input
+                                    id="market-offering-is-active"
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    name="isActive"
+                                    value="1"
+                                    <%= isChecked(offeringFormValues.isActive) ? 'checked' : '' %>
+                                />
+                                <label class="form-check-label" for="market-offering-is-active">
+                                    Active and assignable
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <button class="btn btn-outline-primary" type="submit">Add Booth Offering</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="h5 mb-1">Current Booth Offerings</h2>
+                    <p class="text-body-secondary small mb-0">Update booth numbering, pricing, and active status in place.</p>
+                </div>
+                <div class="card-body">
+                    <% if (boothOfferings.length === 0) { %>
+                        <p class="text-body-secondary mb-0">No booth offerings for this market yet.</p>
+                    <% } else { %>
+                        <div class="d-flex flex-column gap-3">
+                            <% for (const boothOffering of boothOfferings) { %>
+                                <form
+                                    class="border rounded p-3"
+                                    action="/market-ops/market-groups/<%= marketGroup.marketGroupId %>/markets/<%= market.marketId %>/booth-offerings/<%= boothOffering.marketBoothOfferingId %>"
+                                    method="post"
+                                >
+                                    <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                                    <div class="row g-3">
+                                        <div class="col-12">
+                                            <label class="form-label">Booth Type</label>
+                                            <select class="form-select" name="boothTypeId" required>
+                                                <% for (const boothType of boothTypes) { %>
+                                                    <option value="<%= boothType.boothTypeId %>" <%= boothType.boothTypeId === boothOffering.boothTypeId ? 'selected' : '' %>>
+                                                        <%= boothType.label %>
+                                                    </option>
+                                                <% } %>
+                                            </select>
+                                        </div>
+                                        <div class="col-12 col-md-4">
+                                            <label class="form-label">Booth Number</label>
+                                            <input class="form-control" type="number" min="1" name="boothNumber" value="<%= boothOffering.boothNumber %>" required />
+                                        </div>
+                                        <div class="col-12 col-md-4">
+                                            <label class="form-label">Price (Cents)</label>
+                                            <input class="form-control" type="number" min="0" name="priceCents" value="<%= boothOffering.priceCents %>" required />
+                                        </div>
+                                        <div class="col-12 col-md-4">
+                                            <label class="form-label">Sort Order</label>
+                                            <input class="form-control" type="number" min="0" name="sortOrder" value="<%= boothOffering.sortOrder %>" required />
+                                        </div>
+                                        <div class="col-12 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+                                            <div class="form-check">
+                                                <input
+                                                    id="booth-offering-active-<%= boothOffering.marketBoothOfferingId %>"
+                                                    class="form-check-input"
+                                                    type="checkbox"
+                                                    name="isActive"
+                                                    value="1"
+                                                    <%= boothOffering.isActive === 1 ? 'checked' : '' %>
+                                                />
+                                                <label class="form-check-label" for="booth-offering-active-<%= boothOffering.marketBoothOfferingId %>">
+                                                    Active and assignable
+                                                </label>
+                                            </div>
+                                            <button class="btn btn-sm btn-outline-primary" type="submit">Save Offering</button>
+                                        </div>
+                                    </div>
+                                </form>
+                            <% } %>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    <% } %>
+</section>

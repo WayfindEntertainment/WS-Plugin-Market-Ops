@@ -1,0 +1,31 @@
+<%
+    const pageData = marketOpsReportsPageData || {}
+%>
+
+<div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+    <div>
+        <h1 class="h3 m-0">Reports</h1>
+        <p class="text-body-secondary mb-0">This namespace is reserved for vendor mix, booth inventory, and application reporting.</p>
+    </div>
+</div>
+
+<%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash: pageData.flash }) %>
+
+<section class="row g-3">
+    <div class="col-12 col-xl-8">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Coming Soon</h2>
+                <p class="mb-3">
+                    Reporting is intentionally held as a placeholder while the operational routes and workflows settle.
+                </p>
+                <ul class="mb-0">
+                    <li>Vendor category mix per market group</li>
+                    <li>Application volume and selection status summaries</li>
+                    <li>Booth capacity and assignment visibility</li>
+                    <li>Volunteer-interest tracking by market</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>

@@ -1,0 +1,5 @@
+<% if (marketOpsFlash && typeof marketOpsFlash.message === 'string' && marketOpsFlash.message) { %>
+    <div class="alert alert-<%= marketOpsFlash.type || 'info' %> mb-4" role="alert">
+        <%= marketOpsFlash.message %>
+    </div>
+<% } %>
