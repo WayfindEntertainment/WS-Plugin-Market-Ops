@@ -1,0 +1,33 @@
+<%
+    const pageData = marketOpsVendorsPageData || {}
+%>
+
+<div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+    <div>
+        <h1 class="h3 m-0">Vendors</h1>
+        <p class="text-body-secondary mb-0">
+            This section will hold vendor review, ownership management, and business approval flows.
+        </p>
+    </div>
+</div>
+
+<%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash: pageData.flash }) %>
+
+<section class="row g-3">
+    <div class="col-12 col-xl-8">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Planned Scope</h2>
+                <p class="mb-3">
+                    The route exists now so the sidebar model stays stable while the vendor-management workflow is built out.
+                </p>
+                <ul class="mb-3">
+                    <li>Review vendor business profiles and ownership</li>
+                    <li>Approve or reject businesses before they can apply</li>
+                    <li>Inspect assigned product categories</li>
+                </ul>
+                <a class="btn btn-outline-primary" href="/market-ops">Back to Overview</a>
+            </div>
+        </div>
+    </div>
+</section>

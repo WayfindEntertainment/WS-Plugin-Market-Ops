@@ -625,16 +625,31 @@ async function buildDashboardPageData(marketSetupService) {
 }
 
 /**
+ *
+ * @param marketSetupService
+ */
+async function buildSetupPageData(marketSetupService) {
+    const [locations, boothTypes] = await Promise.all([
+        marketSetupService.listLocations(),
+        marketSetupService.listBoothTypes()
+    ])
+
+    return {
+        locations,
+        boothTypes
+    }
+}
+
+/**
  * Create the public Market Operations router.
  *
- * This first route slice intentionally focuses on the Market Ops setup
- * surfaces:
- * - dashboard
- * - locations
- * - market groups
- * - individual markets
- * - booth types
- * - booth offerings
+ * This route slice establishes the first real Market Ops information
+ * architecture:
+ * - overview dashboard
+ * - markets
+ * - setup
+ * - vendors placeholder
+ * - applications placeholder
  * - reports placeholder
  *
  * All of these pages live on the public rendering surface and enforce their
@@ -665,10 +680,57 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
                 title: 'Market Ops',
                 locals: {
                     marketOpsDashboardPageData: await buildDashboardPageData(marketSetupService),
+                    marketOpsFlash: resolveNotice(req.query)
+                }
+            })
+        } catch (err) {
+            next(err)
+        }
+    })
+
+    router.get('/setup', async (req, res, next) => {
+        try {
+            await renderMarketOpsPage(req, res, renderPage, {
+                page: 'pages/market-ops/setup',
+                title: 'Market Ops Setup',
+                locals: {
+                    marketOpsSetupPageData: await buildSetupPageData(marketSetupService),
                     marketOpsBoothTypeFormValues: buildBoothTypeFormValues(),
                     marketOpsFlash: resolveNotice(req.query),
                     marketOpsHelpers: {
                         isCheckedValue
+                    }
+                }
+            })
+        } catch (err) {
+            next(err)
+        }
+    })
+
+    router.get('/vendors', async (req, res, next) => {
+        try {
+            await renderMarketOpsPage(req, res, renderPage, {
+                page: 'pages/market-ops/vendors',
+                title: 'Market Ops Vendors',
+                locals: {
+                    marketOpsVendorsPageData: {
+                        flash: resolveNotice(req.query)
+                    }
+                }
+            })
+        } catch (err) {
+            next(err)
+        }
+    })
+
+    router.get('/applications', async (req, res, next) => {
+        try {
+            await renderMarketOpsPage(req, res, renderPage, {
+                page: 'pages/market-ops/applications',
+                title: 'Market Ops Applications',
+                locals: {
+                    marketOpsApplicationsPageData: {
+                        flash: resolveNotice(req.query)
                     }
                 }
             })
@@ -685,7 +747,7 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
                 buildBoothTypeInputFromFormValues(formValues, req?.user?.user_id ?? null)
             )
 
-            res.redirect(303, '/market-ops?notice=booth-type-created')
+            res.redirect(303, '/market-ops/setup?notice=booth-type-created')
         } catch (err) {
             if (!isRecoverableMarketOpsError(err)) {
                 next(err)
@@ -694,12 +756,11 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
 
             try {
                 await renderMarketOpsPage(req, res, renderPage, {
-                    page: 'pages/market-ops/dashboard',
-                    title: 'Market Ops',
+                    page: 'pages/market-ops/setup',
+                    title: 'Market Ops Setup',
                     statusCode: err.statusCode ?? 400,
                     locals: {
-                        marketOpsDashboardPageData:
-                            await buildDashboardPageData(marketSetupService),
+                        marketOpsSetupPageData: await buildSetupPageData(marketSetupService),
                         marketOpsBoothTypeFormValues: formValues,
                         marketOpsFlash: {
                             type: 'danger',
@@ -754,7 +815,7 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
                 buildBoothTypeInputFromFormValues(formValues, req?.user?.user_id ?? null, boothType)
             )
 
-            res.redirect(303, '/market-ops?notice=booth-type-updated')
+            res.redirect(303, '/market-ops/setup?notice=booth-type-updated')
         } catch (err) {
             next(err)
         }

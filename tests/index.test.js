@@ -1,0 +1,52 @@
+import marketOpsPlugin from '../index.js'
+
+describe('Market Ops plugin declaration', () => {
+    test('declares Market Ops as a parent sidebar group with the expected child order', () => {
+        expect(marketOpsPlugin.navigation).toEqual([
+            expect.objectContaining({
+                id: 'market-ops',
+                location: 'sidebar',
+                label: 'Market Ops',
+                icon: 'shop',
+                index: 55,
+                parent: null,
+                allowChildren: true
+            }),
+            expect.objectContaining({
+                id: 'market-ops-overview',
+                icon: 'speedometer2',
+                href: '/market-ops',
+                index: 1,
+                parent: 'plugin:ws_plugin_market_ops:market-ops'
+            }),
+            expect.objectContaining({
+                id: 'market-ops-markets',
+                icon: 'calendar-week',
+                href: '/market-ops/market-groups',
+                index: 2,
+                parent: 'plugin:ws_plugin_market_ops:market-ops'
+            }),
+            expect.objectContaining({
+                id: 'market-ops-vendors',
+                icon: 'shop-window',
+                href: '/market-ops/vendors',
+                index: 3,
+                parent: 'plugin:ws_plugin_market_ops:market-ops'
+            }),
+            expect.objectContaining({
+                id: 'market-ops-applications',
+                icon: 'journal-text',
+                href: '/market-ops/applications',
+                index: 4,
+                parent: 'plugin:ws_plugin_market_ops:market-ops'
+            }),
+            expect.objectContaining({
+                id: 'market-ops-setup',
+                icon: 'gear',
+                href: '/market-ops/setup',
+                index: 5,
+                parent: 'plugin:ws_plugin_market_ops:market-ops'
+            })
+        ])
+    })
+})

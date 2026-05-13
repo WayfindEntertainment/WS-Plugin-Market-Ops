@@ -7,11 +7,70 @@ const marketOpsPlugin = {
             location: 'sidebar',
             label: 'Market Ops',
             icon: 'shop',
-            href: '/market-ops',
             index: 55,
             parent: null,
+            allowChildren: true
+        },
+        {
+            id: 'market-ops-overview',
+            location: 'sidebar',
+            label: 'Overview',
+            icon: 'speedometer2',
+            href: '/market-ops',
+            index: 1,
+            parent: 'plugin:ws_plugin_market_ops:market-ops',
+            allowChildren: false
+        },
+        {
+            id: 'market-ops-markets',
+            location: 'sidebar',
+            label: 'Markets',
+            icon: 'calendar-week',
+            href: '/market-ops/market-groups',
+            index: 2,
+            parent: 'plugin:ws_plugin_market_ops:market-ops',
+            allowChildren: false
+        },
+        {
+            id: 'market-ops-vendors',
+            location: 'sidebar',
+            label: 'Vendors',
+            icon: 'shop-window',
+            href: '/market-ops/vendors',
+            index: 3,
+            parent: 'plugin:ws_plugin_market_ops:market-ops',
+            allowChildren: false
+        },
+        {
+            id: 'market-ops-applications',
+            location: 'sidebar',
+            label: 'Applications',
+            icon: 'journal-text',
+            href: '/market-ops/applications',
+            index: 4,
+            parent: 'plugin:ws_plugin_market_ops:market-ops',
+            allowChildren: false
+        },
+        {
+            id: 'market-ops-setup',
+            location: 'sidebar',
+            label: 'Setup',
+            icon: 'gear',
+            href: '/market-ops/setup',
+            index: 5,
+            parent: 'plugin:ws_plugin_market_ops:market-ops',
             allowChildren: false
         }
+        // {
+        //     id: 'market-ops-reports',
+        //     location: 'sidebar',
+        //     label: 'Reports',
+        //     icon: 'bar-chart',
+        //     href: '/market-ops/reports',
+        //     index: 6,
+        //     parent: 'plugin:ws_plugin_market_ops:market-ops',
+        //     allowChildren: false
+        // }
     ],
     permissions: {
         ws_plugin_market_ops: {

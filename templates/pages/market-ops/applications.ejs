@@ -1,0 +1,33 @@
+<%
+    const pageData = marketOpsApplicationsPageData || {}
+%>
+
+<div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+    <div>
+        <h1 class="h3 m-0">Applications</h1>
+        <p class="text-body-secondary mb-0">
+            This section will hold submitted application review, market-level decisions, and booth assignment work.
+        </p>
+    </div>
+</div>
+
+<%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash: pageData.flash }) %>
+
+<section class="row g-3">
+    <div class="col-12 col-xl-8">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Planned Scope</h2>
+                <p class="mb-3">
+                    The route exists now so the sidebar can reflect the actual review workflow before the underlying screens are finished.
+                </p>
+                <ul class="mb-3">
+                    <li>Review submitted applications by market group</li>
+                    <li>Approve, waitlist, reject, or withdraw selected markets</li>
+                    <li>Assign booth offerings, quantities, and booth-fee totals</li>
+                </ul>
+                <a class="btn btn-outline-primary" href="/market-ops">Back to Overview</a>
+            </div>
+        </div>
+    </div>
+</section>

@@ -7,23 +7,19 @@
             boothTypeCount: 0
         },
         locations: [],
-        marketGroups: [],
-        boothTypes: []
+        marketGroups: []
     }
-    const formValues = marketOpsBoothTypeFormValues || {}
-    const helpers = marketOpsHelpers || {}
-    const isChecked = typeof helpers.isCheckedValue === 'function' ? helpers.isCheckedValue : (() => false)
 %>
 
 <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
     <div>
         <h1 class="h3 m-0">Market Ops</h1>
         <p class="text-body-secondary mb-0">
-            Configure the operational foundation for locations, market groups, schedules, and booth inventory.
+            Track the overall operational picture, then branch into markets, vendors, applications, or setup work.
         </p>
     </div>
     <div class="d-flex gap-2 flex-wrap">
-        <a class="btn btn-outline-primary" href="/market-ops/locations/create">New Location</a>
+        <a class="btn btn-outline-primary" href="/market-ops/setup">Open Setup</a>
         <a class="btn btn-primary" href="/market-ops/market-groups/create">New Market Group</a>
     </div>
 </div>
@@ -66,7 +62,60 @@
 </section>
 
 <section class="row g-4">
-    <div class="col-12 col-xl-7">
+    <div class="col-12 col-xl-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="h5 mb-1">Workflow Areas</h2>
+                <p class="text-body-secondary small mb-0">
+                    Keep the sidebar stable around the main operational lanes.
+                </p>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <a class="card h-100 text-decoration-none" href="/market-ops/market-groups">
+                            <div class="card-body">
+                                <h3 class="h6 mb-2">Markets</h3>
+                                <p class="text-body-secondary mb-0">
+                                    Build market groups, add dated markets, and manage booth offerings where they belong.
+                                </p>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <a class="card h-100 text-decoration-none" href="/market-ops/vendors">
+                            <div class="card-body">
+                                <h3 class="h6 mb-2">Vendors</h3>
+                                <p class="text-body-secondary mb-0">
+                                    Review vendor businesses and ownership once those workflows are fleshed out.
+                                </p>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <a class="card h-100 text-decoration-none" href="/market-ops/applications">
+                            <div class="card-body">
+                                <h3 class="h6 mb-2">Applications</h3>
+                                <p class="text-body-secondary mb-0">
+                                    Review submitted applications, make per-market decisions, and assign booths.
+                                </p>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <a class="card h-100 text-decoration-none" href="/market-ops/setup">
+                            <div class="card-body">
+                                <h3 class="h6 mb-2">Setup</h3>
+                                <p class="text-body-secondary mb-0">
+                                    Maintain locations and booth types that get reused across many markets.
+                                </p>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card mb-4">
             <div class="card-header d-flex align-items-center justify-content-between">
                 <div>
@@ -130,143 +179,6 @@
                                     <% } %>
                                 </div>
                             </a>
-                        <% } %>
-                    </div>
-                <% } %>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-12 col-xl-5">
-        <div class="card mb-4">
-            <div class="card-header">
-                <h2 class="h5 mb-1">Create Booth Type</h2>
-                <p class="text-body-secondary small mb-0">
-                    Define the reusable booth formats you can later assign to individual markets.
-                </p>
-            </div>
-            <div class="card-body">
-                <form action="/market-ops/booth-types" method="post" class="row g-3">
-                    <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
-                    <div class="col-12 col-md-6">
-                        <label class="form-label" for="dashboard-booth-type-label">Label</label>
-                        <input
-                            id="dashboard-booth-type-label"
-                            class="form-control"
-                            type="text"
-                            name="label"
-                            value="<%= formValues.label || '' %>"
-                            required
-                        />
-                    </div>
-                    <div class="col-12 col-md-6">
-                        <label class="form-label" for="dashboard-booth-type-slug">Slug</label>
-                        <input
-                            id="dashboard-booth-type-slug"
-                            class="form-control"
-                            type="text"
-                            name="slug"
-                            value="<%= formValues.slug || '' %>"
-                            required
-                        />
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label" for="dashboard-booth-type-description">Description</label>
-                        <textarea
-                            id="dashboard-booth-type-description"
-                            class="form-control"
-                            rows="3"
-                            name="description"
-                        ><%= formValues.description || '' %></textarea>
-                    </div>
-                    <div class="col-12 col-md-6">
-                        <label class="form-label" for="dashboard-booth-type-sort-order">Sort Order</label>
-                        <input
-                            id="dashboard-booth-type-sort-order"
-                            class="form-control"
-                            type="number"
-                            min="0"
-                            name="sortOrder"
-                            value="<%= formValues.sortOrder || '0' %>"
-                            required
-                        />
-                    </div>
-                    <div class="col-12 col-md-6 d-flex align-items-end">
-                        <div class="form-check mb-2">
-                            <input
-                                id="dashboard-booth-type-is-active"
-                                class="form-check-input"
-                                type="checkbox"
-                                name="isActive"
-                                value="1"
-                                <%= isChecked(formValues.isActive) ? 'checked' : '' %>
-                            />
-                            <label class="form-check-label" for="dashboard-booth-type-is-active">
-                                Active and available
-                            </label>
-                        </div>
-                    </div>
-                    <div class="col-12">
-                        <button class="btn btn-primary" type="submit">Create Booth Type</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                <h2 class="h5 mb-1">Booth Type Library</h2>
-                <p class="text-body-secondary small mb-0">Update reusable booth labels and availability.</p>
-            </div>
-            <div class="card-body">
-                <% if (dashboard.boothTypes.length === 0) { %>
-                    <p class="text-body-secondary mb-0">No booth types yet.</p>
-                <% } else { %>
-                    <div class="d-flex flex-column gap-3">
-                        <% for (const boothType of dashboard.boothTypes) { %>
-                            <form
-                                class="border rounded p-3"
-                                action="/market-ops/booth-types/<%= boothType.boothTypeId %>"
-                                method="post"
-                            >
-                                <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
-                                <div class="row g-3">
-                                    <div class="col-12 col-md-6">
-                                        <label class="form-label">Label</label>
-                                        <input class="form-control" type="text" name="label" value="<%= boothType.label %>" required />
-                                    </div>
-                                    <div class="col-12 col-md-6">
-                                        <label class="form-label">Slug</label>
-                                        <input class="form-control" type="text" name="slug" value="<%= boothType.slug %>" required />
-                                    </div>
-                                    <div class="col-12">
-                                        <label class="form-label">Description</label>
-                                        <textarea class="form-control" rows="2" name="description"><%= boothType.description || '' %></textarea>
-                                    </div>
-                                    <div class="col-12 col-md-4">
-                                        <label class="form-label">Sort Order</label>
-                                        <input class="form-control" type="number" min="0" name="sortOrder" value="<%= boothType.sortOrder %>" required />
-                                    </div>
-                                    <div class="col-12 col-md-4 d-flex align-items-end">
-                                        <div class="form-check mb-2">
-                                            <input
-                                                id="booth-type-active-<%= boothType.boothTypeId %>"
-                                                class="form-check-input"
-                                                type="checkbox"
-                                                name="isActive"
-                                                value="1"
-                                                <%= boothType.isActive === 1 ? 'checked' : '' %>
-                                            />
-                                            <label class="form-check-label" for="booth-type-active-<%= boothType.boothTypeId %>">
-                                                Active
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <div class="col-12 col-md-4 d-flex align-items-end">
-                                        <button class="btn btn-outline-primary w-100" type="submit">Save</button>
-                                    </div>
-                                </div>
-                            </form>
                         <% } %>
                     </div>
                 <% } %>

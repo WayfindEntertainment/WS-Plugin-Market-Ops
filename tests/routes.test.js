@@ -207,6 +207,9 @@ describe('createMarketOpsPublicRouter', () => {
         expect(router.records.get.map((route) => route.path)).toEqual(
             expect.arrayContaining([
                 '/',
+                '/setup',
+                '/vendors',
+                '/applications',
                 '/locations',
                 '/locations/create',
                 '/market-groups',
@@ -267,6 +270,46 @@ describe('createMarketOpsPublicRouter', () => {
         expect(next).not.toHaveBeenCalled()
     })
 
+    test('renders the setup page with locations and booth types', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage)
+        const marketSetupService = {
+            listLocations: jest.fn(async () => [{ locationId: 2, locationName: 'Crossroads' }]),
+            listBoothTypes: jest.fn(async () => [{ boothTypeId: 3, label: "8'x8'" }])
+        }
+
+        createMarketOpsPublicRouter(sdk, { marketSetupService })
+
+        const setupRoute = router.records.get.find((route) => route.path === '/setup')
+        const req = {
+            query: {},
+            user: { user_id: 1 }
+        }
+        const res = {
+            status: jest.fn().mockReturnThis()
+        }
+        const next = jest.fn()
+
+        await setupRoute.handlers.at(-1)(req, res, next)
+
+        expect(renderPage).toHaveBeenCalledWith(
+            req,
+            res,
+            expect.objectContaining({
+                page: 'pages/market-ops/setup',
+                surface: 'public',
+                locals: expect.objectContaining({
+                    marketOpsSetupPageData: {
+                        locations: [{ locationId: 2, locationName: 'Crossroads' }],
+                        boothTypes: [{ boothTypeId: 3, label: "8'x8'" }]
+                    }
+                })
+            })
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
     test('creates a location and redirects to its detail page', async () => {
         const router = createRouterRecorder()
         const sdk = createSdk(router, jest.fn())
@@ -302,6 +345,47 @@ describe('createMarketOpsPublicRouter', () => {
         expect(res.redirect).toHaveBeenCalledWith(
             303,
             '/market-ops/locations/12?notice=location-created'
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('creates a booth type and redirects back to setup', async () => {
+        const router = createRouterRecorder()
+        const sdk = createSdk(router, jest.fn())
+        const marketSetupService = {
+            createBoothType: jest.fn(async () => ({ boothTypeId: 9 }))
+        }
+
+        createMarketOpsPublicRouter(sdk, { marketSetupService })
+
+        const route = router.records.post.find((entry) => entry.path === '/booth-types')
+        const req = {
+            body: {
+                slug: '8x8',
+                label: "8'x8'",
+                sortOrder: '0',
+                isActive: '1'
+            },
+            user: { user_id: 7 }
+        }
+        const res = {
+            redirect: jest.fn()
+        }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(marketSetupService.createBoothType).toHaveBeenCalledWith(
+            expect.objectContaining({
+                slug: '8x8',
+                label: "8'x8'",
+                createdByUserId: 7,
+                updatedByUserId: 7
+            })
+        )
+        expect(res.redirect).toHaveBeenCalledWith(
+            303,
+            '/market-ops/setup?notice=booth-type-created'
         )
         expect(next).not.toHaveBeenCalled()
     })
