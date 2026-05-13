@@ -183,10 +183,11 @@ describe('Market Ops route helpers', () => {
             slug: 'summer-2026',
             groupName: 'Summer 2026',
             feeMode: 'per_market',
-            feeAmountCents: '2500',
+            feeAmountDollars: '25.00',
             isPublic: '1'
         })
 
+        expect(formValues.feeAmountDollars).toBe('25.00')
         expect(buildMarketGroupInputFromFormValues(formValues, 4)).toEqual({
             slug: 'summer-2026',
             groupName: 'Summer 2026',
@@ -198,6 +199,29 @@ describe('Market Ops route helpers', () => {
             createdByUserId: 4,
             updatedByUserId: 4
         })
+    })
+
+    test('buildMarketGroupFormValues formats stored cents back into dollars', () => {
+        const formValues = buildMarketGroupFormValues({
+            feeMode: 'per_group',
+            feeAmountCents: 3750
+        })
+
+        expect(formValues.feeAmountDollars).toBe('37.50')
+    })
+
+    test('buildMarketGroupInputFromFormValues rejects invalid dollar input', () => {
+        expect(() =>
+            buildMarketGroupInputFromFormValues(
+                buildMarketGroupFormValues({
+                    slug: 'summer-2026',
+                    groupName: 'Summer 2026',
+                    feeMode: 'per_group',
+                    feeAmountDollars: '25.999'
+                }),
+                4
+            )
+        ).toThrow('Application fee must be a valid dollar amount')
     })
 
     test('buildMarketInputFromFormValues parses date/time and application-window fields', () => {
@@ -383,6 +407,131 @@ describe('createMarketOpsPublicRouter', () => {
                             marketCount: 1,
                             boothTypeCount: 1
                         }
+                    })
+                })
+            })
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('renders market groups with human-friendly fee presentation data', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage)
+        const marketSetupService = {
+            listMarketGroups: jest.fn(async () => [
+                {
+                    marketGroupId: 4,
+                    groupName: 'Summer 2026',
+                    slug: 'summer-2026',
+                    summary: 'Peak season markets',
+                    description: null,
+                    feeMode: 'per_group',
+                    feeAmountCents: 2500,
+                    isPublic: 1
+                }
+            ]),
+            listMarketsByMarketGroupId: jest.fn(async () => [{ marketId: 8 }, { marketId: 9 }])
+        }
+
+        createMarketOpsPublicRouter(sdk, { marketSetupService })
+
+        const route = router.records.get.find((entry) => entry.path === '/market-groups')
+        const req = {
+            query: {},
+            user: { user_id: 1 }
+        }
+        const res = {
+            status: jest.fn().mockReturnThis()
+        }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(renderPage).toHaveBeenCalledWith(
+            req,
+            res,
+            expect.objectContaining({
+                page: 'pages/market-ops/market-groups',
+                locals: expect.objectContaining({
+                    marketOpsMarketGroupsPageData: {
+                        marketGroupCards: [
+                            expect.objectContaining({
+                                marketCount: 2,
+                                visibilityLabel: 'Public',
+                                feePresentation: {
+                                    modeLabel: 'One fee per market group',
+                                    feeSummary: '$25.00 once for the full group'
+                                }
+                            })
+                        ]
+                    }
+                })
+            })
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('renders market group detail with schedule-style market presentation data', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage)
+        const marketSetupService = {
+            getMarketGroupDetailById: jest.fn(async () => ({
+                marketGroup: {
+                    marketGroupId: 4,
+                    groupName: 'Summer 2026'
+                },
+                markets: [
+                    {
+                        marketId: 8,
+                        locationId: 2,
+                        marketName: 'Opening Market',
+                        startsAt: Date.parse('2026-05-01T08:00:00'),
+                        endsAt: Date.parse('2026-05-01T16:00:00'),
+                        applicationsOpen: 1,
+                        isPublic: 1
+                    }
+                ]
+            })),
+            listLocations: jest.fn(async () => [
+                { locationId: 2, locationName: 'Crossroads Inside' }
+            ])
+        }
+
+        createMarketOpsPublicRouter(sdk, { marketSetupService })
+
+        const route = router.records.get.find((entry) => entry.path === '/market-groups/:groupId')
+        const req = {
+            params: { groupId: '4' },
+            query: {},
+            user: { user_id: 1 }
+        }
+        const res = {
+            status: jest.fn().mockReturnThis()
+        }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(renderPage).toHaveBeenCalledWith(
+            req,
+            res,
+            expect.objectContaining({
+                page: 'pages/market-ops/market-group-editor',
+                locals: expect.objectContaining({
+                    marketOpsMarketGroupEditor: expect.objectContaining({
+                        marketScheduleItems: [
+                            expect.objectContaining({
+                                marketId: 8,
+                                marketName: 'Opening Market',
+                                locationName: 'Crossroads Inside',
+                                visibilityLabel: 'Public',
+                                applicationsLabel: 'Applications Open',
+                                dayLabel: expect.any(String),
+                                timeRangeLabel: expect.any(String)
+                            })
+                        ]
                     })
                 })
             })

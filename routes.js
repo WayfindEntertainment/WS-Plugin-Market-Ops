@@ -276,6 +276,63 @@ export function formatDatetimeLocalValue(epochMs) {
         .concat(`T${pad(value.getHours())}:${pad(value.getMinutes())}`)
 }
 
+const USD_CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD'
+})
+const MARKET_SCHEDULE_DAY_FORMATTER = new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+})
+const MARKET_SCHEDULE_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit'
+})
+
+/**
+ *
+ * @param cents
+ */
+function formatCurrencyFromCents(cents) {
+    const normalizedCents = Number.isFinite(Number(cents)) ? Number(cents) : 0
+
+    return USD_CURRENCY_FORMATTER.format(normalizedCents / 100)
+}
+
+/**
+ *
+ * @param cents
+ */
+function formatDollarInputFromCents(cents) {
+    const normalizedCents = Number.isFinite(Number(cents)) ? Number(cents) : 0
+
+    return (normalizedCents / 100).toFixed(2)
+}
+
+/**
+ *
+ * @param value
+ * @param fieldName
+ * @param errorCode
+ */
+function normalizeDollarAmountField(value, fieldName, errorCode) {
+    const normalizedValue = normalizeTrimmedString(value, '0')
+
+    if (!/^\d+(?:\.\d{1,2})?$/.test(normalizedValue)) {
+        throw createRouteError(errorCode, `${fieldName} must be a valid dollar amount`)
+    }
+
+    const parsedValue = Number.parseFloat(normalizedValue)
+
+    if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+        throw createRouteError(errorCode, `${fieldName} must be a valid dollar amount`)
+    }
+
+    return Math.round(parsedValue * 100)
+}
+
 /**
  *
  * @param source
@@ -309,7 +366,10 @@ export function buildMarketGroupFormValues(source = {}, { isPublicFallback = '1'
         summary: normalizeTrimmedString(source.summary),
         description: normalizeTrimmedString(source.description),
         feeMode: normalizeTrimmedString(source.feeMode, 'none') || 'none',
-        feeAmountCents: normalizeTrimmedString(source.feeAmountCents, '0') || '0',
+        feeAmountDollars:
+            typeof source.feeAmountDollars === 'string'
+                ? normalizeTrimmedString(source.feeAmountDollars, '0.00') || '0.00'
+                : formatDollarInputFromCents(source.feeAmountCents),
         isPublic: normalizeCheckboxValue(source.isPublic, isPublicFallback)
     }
 }
@@ -449,14 +509,24 @@ export function buildMarketGroupInputFromFormValues(
     existingRecord = null
 ) {
     return {
-        slug: normalizeTrimmedString(formValues.slug),
-        groupName: normalizeTrimmedString(formValues.groupName),
+        slug: normalizeRequiredBoundedStringField(
+            formValues.slug,
+            'Slug',
+            128,
+            'INVALID_MARKET_GROUP_SLUG'
+        ),
+        groupName: normalizeRequiredBoundedStringField(
+            formValues.groupName,
+            'Group name',
+            255,
+            'INVALID_MARKET_GROUP_NAME'
+        ),
         summary: normalizeOptionalStringField(formValues.summary),
         description: normalizeOptionalStringField(formValues.description),
         feeMode: normalizeTrimmedString(formValues.feeMode, 'none') || 'none',
-        feeAmountCents: normalizeNonNegativeIntegerField(
-            formValues.feeAmountCents,
-            'Fee amount',
+        feeAmountCents: normalizeDollarAmountField(
+            formValues.feeAmountDollars,
+            'Application fee',
             'INVALID_MARKET_GROUP_FEE_AMOUNT_CENTS'
         ),
         isPublic: isCheckedValue(formValues.isPublic) ? 1 : 0,
@@ -778,6 +848,133 @@ function resolveSetupSection(query = {}) {
     const section = typeof query.section === 'string' ? query.section.trim() : ''
 
     return MARKET_OPS_SETUP_SECTIONS.has(section) ? section : 'locations'
+}
+
+/**
+ *
+ * @param feeMode
+ */
+function resolveMarketGroupFeeModeLabel(feeMode) {
+    return (
+        MARKET_GROUP_FEE_MODE_OPTIONS.find((option) => option.value === feeMode)?.label ??
+        'Fee configuration'
+    )
+}
+
+/**
+ *
+ * @param marketGroup
+ */
+function buildMarketGroupFeePresentation(marketGroup) {
+    const formattedAmount = formatCurrencyFromCents(marketGroup?.feeAmountCents ?? 0)
+
+    if (marketGroup?.feeMode === 'per_group') {
+        return {
+            modeLabel: resolveMarketGroupFeeModeLabel(marketGroup.feeMode),
+            feeSummary: `${formattedAmount} once for the full group`
+        }
+    }
+
+    if (marketGroup?.feeMode === 'per_market') {
+        return {
+            modeLabel: resolveMarketGroupFeeModeLabel(marketGroup.feeMode),
+            feeSummary: `${formattedAmount} per selected market`
+        }
+    }
+
+    return {
+        modeLabel: resolveMarketGroupFeeModeLabel(marketGroup?.feeMode),
+        feeSummary: 'No application fee'
+    }
+}
+
+/**
+ *
+ * @param {number} epochMs
+ */
+function formatMarketScheduleDayLabel(epochMs) {
+    if (typeof epochMs !== 'number' || !Number.isFinite(epochMs) || epochMs <= 0) {
+        return 'Date unavailable'
+    }
+
+    return MARKET_SCHEDULE_DAY_FORMATTER.format(new Date(epochMs))
+}
+
+/**
+ *
+ * @param {number} startsAt
+ * @param {number} endsAt
+ */
+function formatMarketScheduleTimeRangeLabel(startsAt, endsAt) {
+    if (
+        typeof startsAt !== 'number' ||
+        !Number.isFinite(startsAt) ||
+        startsAt <= 0 ||
+        typeof endsAt !== 'number' ||
+        !Number.isFinite(endsAt) ||
+        endsAt <= 0
+    ) {
+        return 'Time unavailable'
+    }
+
+    const startDate = new Date(startsAt)
+    const endDate = new Date(endsAt)
+    const isSameDay =
+        startDate.getFullYear() === endDate.getFullYear() &&
+        startDate.getMonth() === endDate.getMonth() &&
+        startDate.getDate() === endDate.getDate()
+
+    if (isSameDay) {
+        return `${MARKET_SCHEDULE_TIME_FORMATTER.format(startDate)} - ${MARKET_SCHEDULE_TIME_FORMATTER.format(endDate)}`
+    }
+
+    return `${MARKET_SCHEDULE_DAY_FORMATTER.format(startDate)} ${MARKET_SCHEDULE_TIME_FORMATTER.format(startDate)} - ${MARKET_SCHEDULE_DAY_FORMATTER.format(endDate)} ${MARKET_SCHEDULE_TIME_FORMATTER.format(endDate)}`
+}
+
+/**
+ *
+ * @param {Array<{ locationId: number, locationName: string }>} locations
+ */
+function createLocationNameMap(locations) {
+    const locationNameMap = new Map()
+
+    for (const location of locations) {
+        if (location?.locationId) {
+            locationNameMap.set(location.locationId, location.locationName)
+        }
+    }
+
+    return locationNameMap
+}
+
+/**
+ *
+ * @param {Array<{
+ *   marketId: number,
+ *   locationId: number,
+ *   marketName: string,
+ *   startsAt: number,
+ *   endsAt: number,
+ *   applicationsOpen: number,
+ *   isPublic: number
+ * }>} markets
+ * @param {Array<{ locationId: number, locationName: string }>} locations
+ */
+function buildMarketScheduleItems(markets, locations) {
+    const locationNameMap = createLocationNameMap(locations)
+
+    return markets.map((market) => ({
+        marketId: market.marketId,
+        marketName: market.marketName,
+        startsAt: market.startsAt,
+        endsAt: market.endsAt,
+        dayLabel: formatMarketScheduleDayLabel(market.startsAt),
+        timeRangeLabel: formatMarketScheduleTimeRangeLabel(market.startsAt, market.endsAt),
+        locationName: locationNameMap.get(market.locationId) ?? 'Location unavailable',
+        visibilityLabel: market.isPublic === 1 ? 'Public' : 'Private',
+        applicationsLabel:
+            market.applicationsOpen === 1 ? 'Applications Open' : 'Applications Closed'
+    }))
 }
 
 /**
@@ -1291,14 +1488,20 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
         try {
             const marketGroups = await marketSetupService.listMarketGroups()
             const marketGroupCards = await Promise.all(
-                marketGroups.map(async (marketGroup) => ({
-                    marketGroup,
-                    marketCount: (
+                marketGroups.map(async (marketGroup) => {
+                    const marketCount = (
                         await marketSetupService.listMarketsByMarketGroupId(
                             marketGroup.marketGroupId
                         )
                     ).length
-                }))
+
+                    return {
+                        marketGroup,
+                        marketCount,
+                        feePresentation: buildMarketGroupFeePresentation(marketGroup),
+                        visibilityLabel: marketGroup.isPublic === 1 ? 'Public' : 'Private'
+                    }
+                })
             )
 
             await renderMarketOpsPage(req, res, renderPage, {
@@ -1400,7 +1603,10 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
         }
 
         try {
-            const marketGroupDetail = await marketSetupService.getMarketGroupDetailById(groupId)
+            const [marketGroupDetail, locations] = await Promise.all([
+                marketSetupService.getMarketGroupDetailById(groupId),
+                marketSetupService.listLocations()
+            ])
 
             await renderMarketOpsPage(req, res, renderPage, {
                 page: 'pages/market-ops/market-group-editor',
@@ -1410,6 +1616,10 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
                         mode: 'edit',
                         marketGroup: marketGroupDetail.marketGroup,
                         markets: marketGroupDetail.markets,
+                        marketScheduleItems: buildMarketScheduleItems(
+                            marketGroupDetail.markets,
+                            locations
+                        ),
                         formAction: `/market-ops/market-groups/${groupId}`,
                         formValues: buildMarketGroupFormValues(marketGroupDetail.marketGroup),
                         flash: resolveNotice(req.query),
@@ -1480,7 +1690,10 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
             }
 
             try {
-                const marketGroupDetail = await marketSetupService.getMarketGroupDetailById(groupId)
+                const [marketGroupDetail, locations] = await Promise.all([
+                    marketSetupService.getMarketGroupDetailById(groupId),
+                    marketSetupService.listLocations()
+                ])
 
                 await renderMarketOpsPage(req, res, renderPage, {
                     page: 'pages/market-ops/market-group-editor',
@@ -1491,6 +1704,10 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
                             mode: 'edit',
                             marketGroup: marketGroupDetail.marketGroup,
                             markets: marketGroupDetail.markets,
+                            marketScheduleItems: buildMarketScheduleItems(
+                                marketGroupDetail.markets,
+                                locations
+                            ),
                             formAction: `/market-ops/market-groups/${groupId}`,
                             formValues,
                             flash: {

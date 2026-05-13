@@ -1,0 +1,25 @@
+.market-ops-market-schedule-link {
+    transition:
+        background-color 0.18s ease,
+        border-color 0.18s ease,
+        box-shadow 0.18s ease,
+        transform 0.18s ease;
+}
+
+.market-ops-market-schedule-link:hover,
+.market-ops-market-schedule-link:focus-visible {
+    background-color: rgba(var(--bs-primary-rgb), 0.06);
+    border-color: rgba(var(--bs-primary-rgb), 0.24);
+    box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+}
+
+.market-ops-market-schedule-link:hover .market-ops-market-schedule-title,
+.market-ops-market-schedule-link:focus-visible .market-ops-market-schedule-title {
+    color: var(--bs-primary);
+}
+
+.market-ops-market-schedule-link:hover .market-ops-market-schedule-meta,
+.market-ops-market-schedule-link:focus-visible .market-ops-market-schedule-meta {
+    color: var(--bs-body-color);
+}

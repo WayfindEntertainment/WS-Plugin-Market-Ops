@@ -186,6 +186,9 @@ describe('market-storage', () => {
             expect.objectContaining({ marketGroupId: 5 })
         )
         await expect(listMarketGroups(queryable)).resolves.toHaveLength(1)
+        expect(queryable.query).toHaveBeenCalledWith(
+            expect.stringContaining('ORDER BY is_public DESC, group_name ASC, market_group_id ASC')
+        )
         await expect(
             updateMarketGroupById(queryable, 5, {
                 groupName: 'Summer 2026 Markets',

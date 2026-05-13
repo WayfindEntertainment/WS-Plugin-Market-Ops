@@ -1067,7 +1067,7 @@ export async function getMarketGroupById(queryable, marketGroupId) {
 }
 
 /**
- * List market groups in name order.
+ * List market groups with public records first, then alphabetical by name.
  *
  * @param {{ query: (sql: string, params?: unknown[]) => Promise<unknown> }} queryable - Query seam.
  * @returns {Promise<Array<ReturnType<typeof mapMarketGroupRow>>>} Market groups.
@@ -1090,7 +1090,7 @@ export async function listMarketGroups(queryable) {
             updated_at,
             updated_by_user_id
         FROM market_ops_market_groups
-        ORDER BY group_name ASC, market_group_id ASC
+        ORDER BY is_public DESC, group_name ASC, market_group_id ASC
         `
     )
 
