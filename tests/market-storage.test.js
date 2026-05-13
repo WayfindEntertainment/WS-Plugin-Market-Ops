@@ -57,6 +57,7 @@ describe('market-storage', () => {
                             state_code: 'WA',
                             postal_code: '98366',
                             public_notes: null,
+                            is_active: updated ? 0 : 1,
                             created_at: 10,
                             created_by_user_id: 1,
                             updated_at: updated ? 30 : 20,
@@ -78,23 +79,59 @@ describe('market-storage', () => {
                 city: 'Port Orchard',
                 stateCode: 'WA',
                 postalCode: '98366',
+                isActive: 1,
                 createdAt: 10,
                 createdByUserId: 1,
                 updatedAt: 20,
                 updatedByUserId: 2
             })
-        ).resolves.toEqual(expect.objectContaining({ locationId: 2 }))
+        ).resolves.toEqual(expect.objectContaining({ locationId: 2, isActive: 1 }))
         await expect(getLocationById(queryable, 2)).resolves.toEqual(
-            expect.objectContaining({ locationId: 2 })
+            expect.objectContaining({ locationId: 2, isActive: 1 })
         )
         await expect(listLocations(queryable)).resolves.toHaveLength(1)
+        expect(queryable.query).toHaveBeenCalledWith(
+            expect.stringContaining('ORDER BY is_active DESC, location_name ASC, location_id ASC')
+        )
         await expect(
             updateLocationById(queryable, 2, {
                 locationName: 'Crossroads Main Hall',
+                isActive: 0,
                 updatedAt: 30,
                 updatedByUserId: 3
             })
-        ).resolves.toEqual(expect.objectContaining({ locationName: 'Crossroads Main Hall' }))
+        ).resolves.toEqual(
+            expect.objectContaining({ locationName: 'Crossroads Main Hall', isActive: 0 })
+        )
+    })
+
+    test('getLocationById selects is_active so editor reads active state correctly', async () => {
+        const queryable = createQueryable(async () => [
+            [
+                {
+                    location_id: 2,
+                    slug: 'crossroads-inside',
+                    location_name: 'Crossroads Inside',
+                    address_line_1: null,
+                    address_line_2: null,
+                    city: null,
+                    state_code: null,
+                    postal_code: null,
+                    public_notes: null,
+                    is_active: 0,
+                    created_at: 10,
+                    created_by_user_id: 1,
+                    updated_at: 20,
+                    updated_by_user_id: 2
+                }
+            ],
+            undefined
+        ])
+
+        await expect(getLocationById(queryable, 2)).resolves.toEqual(
+            expect.objectContaining({ isActive: 0 })
+        )
+        expect(queryable.query).toHaveBeenCalledWith(expect.stringContaining('is_active'), [2])
     })
 
     test('creates, reads, lists, and updates market groups', async () => {

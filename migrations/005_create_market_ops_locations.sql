@@ -11,6 +11,7 @@ CREATE TABLE market_ops_locations (
     state_code CHAR(2) NULL,
     postal_code VARCHAR(32) NULL,
     public_notes TEXT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
     created_at BIGINT NOT NULL,
     created_by_user_id INT UNSIGNED NULL,
     updated_at BIGINT NOT NULL,
@@ -19,6 +20,7 @@ CREATE TABLE market_ops_locations (
     PRIMARY KEY (location_id),
     UNIQUE KEY uk_market_ops_locations_slug (slug),
     KEY idx_market_ops_locations_location_name (location_name),
+    KEY idx_market_ops_locations_is_active_location_name (is_active, location_name),
     CONSTRAINT fk_market_ops_locations_created_by_user
         FOREIGN KEY (created_by_user_id)
         REFERENCES kernel_users(user_id)

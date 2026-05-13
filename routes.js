@@ -23,6 +23,8 @@ const NOTICE_MESSAGES = {
     'market-updated': { type: 'success', message: 'Market updated.' }
 }
 
+const MARKET_OPS_SETUP_SECTIONS = new Set(['locations', 'booth_types'])
+
 /**
  *
  * @param code
@@ -161,6 +163,78 @@ function normalizeOptionalStringField(value) {
  *
  * @param value
  * @param fieldName
+ * @param maxLength
+ * @param errorCode
+ */
+function normalizeRequiredBoundedStringField(value, fieldName, maxLength, errorCode) {
+    const normalizedValue = normalizeTrimmedString(value)
+
+    if (!normalizedValue) {
+        throw createRouteError(errorCode, `${fieldName} is required`)
+    }
+
+    if (normalizedValue.length > maxLength) {
+        throw createRouteError(errorCode, `${fieldName} must be ${maxLength} characters or fewer`)
+    }
+
+    return normalizedValue
+}
+
+/**
+ *
+ * @param value
+ * @param fieldName
+ * @param maxLength
+ * @param errorCode
+ */
+function normalizeOptionalBoundedStringField(value, fieldName, maxLength, errorCode) {
+    const normalizedValue = normalizeOptionalStringField(value)
+
+    if (normalizedValue == null) {
+        return null
+    }
+
+    if (normalizedValue.length > maxLength) {
+        throw createRouteError(errorCode, `${fieldName} must be ${maxLength} characters or fewer`)
+    }
+
+    return normalizedValue
+}
+
+/**
+ *
+ * @param value
+ */
+function normalizeOptionalStateCodeField(value) {
+    const normalizedValue = normalizeOptionalStringField(value)
+
+    if (normalizedValue == null) {
+        return null
+    }
+
+    const upperCasedValue = normalizedValue.toUpperCase()
+
+    if (upperCasedValue.length !== 2) {
+        throw createRouteError(
+            'INVALID_LOCATION_STATE_CODE',
+            'State must be a 2-letter code such as WA'
+        )
+    }
+
+    if (!/^[A-Z]{2}$/.test(upperCasedValue)) {
+        throw createRouteError(
+            'INVALID_LOCATION_STATE_CODE',
+            'State must be a 2-letter code such as WA'
+        )
+    }
+
+    return upperCasedValue
+}
+
+/**
+ *
+ * @param value
+ * @param fieldName
  * @param errorCode
  * @param root0
  * @param root0.allowNull
@@ -205,8 +279,10 @@ export function formatDatetimeLocalValue(epochMs) {
 /**
  *
  * @param source
+ * @param root0
+ * @param root0.isActiveFallback
  */
-export function buildLocationFormValues(source = {}) {
+export function buildLocationFormValues(source = {}, { isActiveFallback = '1' } = {}) {
     return {
         slug: normalizeTrimmedString(source.slug),
         locationName: normalizeTrimmedString(source.locationName),
@@ -215,15 +291,18 @@ export function buildLocationFormValues(source = {}) {
         city: normalizeTrimmedString(source.city),
         stateCode: normalizeTrimmedString(source.stateCode),
         postalCode: normalizeTrimmedString(source.postalCode),
-        publicNotes: normalizeTrimmedString(source.publicNotes)
+        publicNotes: normalizeTrimmedString(source.publicNotes),
+        isActive: normalizeCheckboxValue(source.isActive, isActiveFallback)
     }
 }
 
 /**
  *
  * @param source
+ * @param root0
+ * @param root0.isPublicFallback
  */
-export function buildMarketGroupFormValues(source = {}) {
+export function buildMarketGroupFormValues(source = {}, { isPublicFallback = '1' } = {}) {
     return {
         slug: normalizeTrimmedString(source.slug),
         groupName: normalizeTrimmedString(source.groupName),
@@ -231,20 +310,22 @@ export function buildMarketGroupFormValues(source = {}) {
         description: normalizeTrimmedString(source.description),
         feeMode: normalizeTrimmedString(source.feeMode, 'none') || 'none',
         feeAmountCents: normalizeTrimmedString(source.feeAmountCents, '0') || '0',
-        isPublic: normalizeCheckboxValue(source.isPublic, '1')
+        isPublic: normalizeCheckboxValue(source.isPublic, isPublicFallback)
     }
 }
 
 /**
  *
  * @param source
+ * @param root0
+ * @param root0.isActiveFallback
  */
-export function buildBoothTypeFormValues(source = {}) {
+export function buildBoothTypeFormValues(source = {}, { isActiveFallback = '1' } = {}) {
     return {
         slug: normalizeTrimmedString(source.slug),
         label: normalizeTrimmedString(source.label),
         description: normalizeTrimmedString(source.description),
-        isActive: normalizeCheckboxValue(source.isActive, '1'),
+        isActive: normalizeCheckboxValue(source.isActive, isActiveFallback),
         sortOrder: normalizeTrimmedString(source.sortOrder, '0') || '0'
     }
 }
@@ -252,8 +333,14 @@ export function buildBoothTypeFormValues(source = {}) {
 /**
  *
  * @param source
+ * @param root0
+ * @param root0.applicationsOpenFallback
+ * @param root0.isPublicFallback
  */
-export function buildMarketFormValues(source = {}) {
+export function buildMarketFormValues(
+    source = {},
+    { applicationsOpenFallback = '0', isPublicFallback = '1' } = {}
+) {
     return {
         locationId: normalizeTrimmedString(source.locationId),
         slug: normalizeTrimmedString(source.slug),
@@ -268,7 +355,7 @@ export function buildMarketFormValues(source = {}) {
             typeof source.endsAtInput === 'string'
                 ? source.endsAtInput
                 : formatDatetimeLocalValue(source.endsAt),
-        applicationsOpen: normalizeCheckboxValue(source.applicationsOpen, '0'),
+        applicationsOpen: normalizeCheckboxValue(source.applicationsOpen, applicationsOpenFallback),
         applicationsOpenAtInput:
             typeof source.applicationsOpenAtInput === 'string'
                 ? source.applicationsOpenAtInput
@@ -278,20 +365,22 @@ export function buildMarketFormValues(source = {}) {
                 ? source.applicationsCloseAtInput
                 : formatDatetimeLocalValue(source.applicationsCloseAt),
         feeAmountCents: normalizeTrimmedString(source.feeAmountCents, '0') || '0',
-        isPublic: normalizeCheckboxValue(source.isPublic, '1')
+        isPublic: normalizeCheckboxValue(source.isPublic, isPublicFallback)
     }
 }
 
 /**
  *
  * @param source
+ * @param root0
+ * @param root0.isActiveFallback
  */
-export function buildMarketBoothOfferingFormValues(source = {}) {
+export function buildMarketBoothOfferingFormValues(source = {}, { isActiveFallback = '1' } = {}) {
     return {
         boothTypeId: normalizeTrimmedString(source.boothTypeId),
         boothNumber: normalizeTrimmedString(source.boothNumber),
         priceCents: normalizeTrimmedString(source.priceCents, '0') || '0',
-        isActive: normalizeCheckboxValue(source.isActive, '1'),
+        isActive: normalizeCheckboxValue(source.isActive, isActiveFallback),
         sortOrder: normalizeTrimmedString(source.sortOrder, '0') || '0'
     }
 }
@@ -304,14 +393,45 @@ export function buildMarketBoothOfferingFormValues(source = {}) {
  */
 export function buildLocationInputFromFormValues(formValues, actorUserId, existingRecord = null) {
     return {
-        slug: normalizeTrimmedString(formValues.slug),
-        locationName: normalizeTrimmedString(formValues.locationName),
-        addressLine1: normalizeOptionalStringField(formValues.addressLine1),
-        addressLine2: normalizeOptionalStringField(formValues.addressLine2),
-        city: normalizeOptionalStringField(formValues.city),
-        stateCode: normalizeOptionalStringField(formValues.stateCode),
-        postalCode: normalizeOptionalStringField(formValues.postalCode),
+        slug: normalizeRequiredBoundedStringField(
+            formValues.slug,
+            'Slug',
+            128,
+            'INVALID_LOCATION_SLUG'
+        ),
+        locationName: normalizeRequiredBoundedStringField(
+            formValues.locationName,
+            'Location name',
+            255,
+            'INVALID_LOCATION_NAME'
+        ),
+        addressLine1: normalizeOptionalBoundedStringField(
+            formValues.addressLine1,
+            'Address line 1',
+            255,
+            'INVALID_LOCATION_ADDRESS_LINE_1'
+        ),
+        addressLine2: normalizeOptionalBoundedStringField(
+            formValues.addressLine2,
+            'Address line 2',
+            255,
+            'INVALID_LOCATION_ADDRESS_LINE_2'
+        ),
+        city: normalizeOptionalBoundedStringField(
+            formValues.city,
+            'City',
+            128,
+            'INVALID_LOCATION_CITY'
+        ),
+        stateCode: normalizeOptionalStateCodeField(formValues.stateCode),
+        postalCode: normalizeOptionalBoundedStringField(
+            formValues.postalCode,
+            'Postal code',
+            32,
+            'INVALID_LOCATION_POSTAL_CODE'
+        ),
         publicNotes: normalizeOptionalStringField(formValues.publicNotes),
+        isActive: isCheckedValue(formValues.isActive) ? 1 : 0,
         createdByUserId: existingRecord?.createdByUserId ?? actorUserId,
         updatedByUserId: actorUserId
     }
@@ -353,8 +473,18 @@ export function buildMarketGroupInputFromFormValues(
  */
 export function buildBoothTypeInputFromFormValues(formValues, actorUserId, existingRecord = null) {
     return {
-        slug: normalizeTrimmedString(formValues.slug),
-        label: normalizeTrimmedString(formValues.label),
+        slug: normalizeRequiredBoundedStringField(
+            formValues.slug,
+            'Slug',
+            128,
+            'INVALID_BOOTH_TYPE_SLUG'
+        ),
+        label: normalizeRequiredBoundedStringField(
+            formValues.label,
+            'Label',
+            255,
+            'INVALID_BOOTH_TYPE_LABEL'
+        ),
         description: normalizeOptionalStringField(formValues.description),
         isActive: isCheckedValue(formValues.isActive) ? 1 : 0,
         sortOrder: normalizeNonNegativeIntegerField(
@@ -641,6 +771,16 @@ async function buildSetupPageData(marketSetupService) {
 }
 
 /**
+ *
+ * @param query
+ */
+function resolveSetupSection(query = {}) {
+    const section = typeof query.section === 'string' ? query.section.trim() : ''
+
+    return MARKET_OPS_SETUP_SECTIONS.has(section) ? section : 'locations'
+}
+
+/**
  * Create the public Market Operations router.
  *
  * This route slice establishes the first real Market Ops information
@@ -695,11 +835,8 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
                 title: 'Market Ops Setup',
                 locals: {
                     marketOpsSetupPageData: await buildSetupPageData(marketSetupService),
-                    marketOpsBoothTypeFormValues: buildBoothTypeFormValues(),
-                    marketOpsFlash: resolveNotice(req.query),
-                    marketOpsHelpers: {
-                        isCheckedValue
-                    }
+                    marketOpsSetupActiveSection: resolveSetupSection(req.query),
+                    marketOpsFlash: resolveNotice(req.query)
                 }
             })
         } catch (err) {
@@ -739,15 +876,41 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
         }
     })
 
-    router.post('/booth-types', async (req, res, next) => {
-        const formValues = buildBoothTypeFormValues(req.body)
+    router.get('/booth-types/create', async (req, res, next) => {
+        try {
+            await renderMarketOpsPage(req, res, renderPage, {
+                page: 'pages/market-ops/booth-type-editor',
+                title: 'Create Booth Type',
+                locals: {
+                    marketOpsBoothTypeEditor: {
+                        mode: 'create',
+                        boothType: null,
+                        formAction: '/market-ops/booth-types/create',
+                        formValues: buildBoothTypeFormValues(),
+                        flash: resolveNotice(req.query),
+                        helpers: {
+                            isCheckedValue
+                        }
+                    }
+                }
+            })
+        } catch (err) {
+            next(err)
+        }
+    })
+
+    router.post('/booth-types/create', async (req, res, next) => {
+        const formValues = buildBoothTypeFormValues(req.body, { isActiveFallback: '0' })
 
         try {
-            await marketSetupService.createBoothType(
+            const createdBoothType = await marketSetupService.createBoothType(
                 buildBoothTypeInputFromFormValues(formValues, req?.user?.user_id ?? null)
             )
 
-            res.redirect(303, '/market-ops/setup?notice=booth-type-created')
+            res.redirect(
+                303,
+                `/market-ops/booth-types/${createdBoothType.boothTypeId}?notice=booth-type-created`
+            )
         } catch (err) {
             if (!isRecoverableMarketOpsError(err)) {
                 next(err)
@@ -756,27 +919,80 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
 
             try {
                 await renderMarketOpsPage(req, res, renderPage, {
-                    page: 'pages/market-ops/setup',
-                    title: 'Market Ops Setup',
+                    page: 'pages/market-ops/booth-type-editor',
+                    title: 'Create Booth Type',
                     statusCode: err.statusCode ?? 400,
                     locals: {
-                        marketOpsSetupPageData: await buildSetupPageData(marketSetupService),
-                        marketOpsBoothTypeFormValues: formValues,
-                        marketOpsFlash: {
-                            type: 'danger',
-                            message: getMarketOpsErrorMessage(
-                                err,
-                                'We could not create that booth type.'
-                            )
-                        },
-                        marketOpsHelpers: {
-                            isCheckedValue
+                        marketOpsBoothTypeEditor: {
+                            mode: 'create',
+                            boothType: null,
+                            formAction: '/market-ops/booth-types/create',
+                            formValues,
+                            flash: {
+                                type: 'danger',
+                                message: getMarketOpsErrorMessage(
+                                    err,
+                                    'We could not create that booth type.'
+                                )
+                            },
+                            helpers: {
+                                isCheckedValue
+                            }
                         }
                     }
                 })
             } catch (renderErr) {
                 next(renderErr)
             }
+        }
+    })
+
+    router.get('/booth-types/:boothTypeId', async (req, res, next) => {
+        const boothTypeId = resolveRouteId(req?.params?.boothTypeId)
+
+        if (!boothTypeId) {
+            await renderMarketOpsNotFound(
+                req,
+                res,
+                renderPage,
+                'Booth Type Not Found',
+                'That booth type could not be found.'
+            )
+            return
+        }
+
+        try {
+            const boothType = await marketSetupService.getBoothTypeById(boothTypeId)
+
+            if (!boothType) {
+                await renderMarketOpsNotFound(
+                    req,
+                    res,
+                    renderPage,
+                    'Booth Type Not Found',
+                    'That booth type could not be found.'
+                )
+                return
+            }
+
+            await renderMarketOpsPage(req, res, renderPage, {
+                page: 'pages/market-ops/booth-type-editor',
+                title: boothType.label,
+                locals: {
+                    marketOpsBoothTypeEditor: {
+                        mode: 'edit',
+                        boothType,
+                        formAction: `/market-ops/booth-types/${boothTypeId}`,
+                        formValues: buildBoothTypeFormValues(boothType),
+                        flash: resolveNotice(req.query),
+                        helpers: {
+                            isCheckedValue
+                        }
+                    }
+                }
+            })
+        } catch (err) {
+            next(err)
         }
     })
 
@@ -808,31 +1024,66 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
                 return
             }
 
-            const formValues = buildBoothTypeFormValues(req.body)
+            const formValues = buildBoothTypeFormValues(req.body, { isActiveFallback: '0' })
 
             await marketSetupService.updateBoothTypeById(
                 boothTypeId,
                 buildBoothTypeInputFromFormValues(formValues, req?.user?.user_id ?? null, boothType)
             )
 
-            res.redirect(303, '/market-ops/setup?notice=booth-type-updated')
+            res.redirect(303, `/market-ops/booth-types/${boothTypeId}?notice=booth-type-updated`)
         } catch (err) {
-            next(err)
+            if (!isRecoverableMarketOpsError(err)) {
+                next(err)
+                return
+            }
+
+            try {
+                const boothType = await marketSetupService.getBoothTypeById(boothTypeId)
+
+                await renderMarketOpsPage(req, res, renderPage, {
+                    page: 'pages/market-ops/booth-type-editor',
+                    title: boothType?.label || 'Edit Booth Type',
+                    statusCode: err.statusCode ?? 400,
+                    locals: {
+                        marketOpsBoothTypeEditor: {
+                            mode: 'edit',
+                            boothType,
+                            formAction: `/market-ops/booth-types/${boothTypeId}`,
+                            formValues: buildBoothTypeFormValues(req.body, {
+                                isActiveFallback: '0'
+                            }),
+                            flash: {
+                                type: 'danger',
+                                message: getMarketOpsErrorMessage(
+                                    err,
+                                    'We could not update that booth type.'
+                                )
+                            },
+                            helpers: {
+                                isCheckedValue
+                            }
+                        }
+                    }
+                })
+            } catch (renderErr) {
+                next(renderErr)
+            }
         }
     })
 
     router.get('/locations', async (req, res, next) => {
         try {
-            await renderMarketOpsPage(req, res, renderPage, {
-                page: 'pages/market-ops/locations',
-                title: 'Locations',
-                locals: {
-                    marketOpsLocationsPageData: {
-                        locations: await marketSetupService.listLocations()
-                    },
-                    marketOpsFlash: resolveNotice(req.query)
+            const params = new URLSearchParams()
+
+            Object.entries(req?.query ?? {}).forEach(([key, value]) => {
+                if (typeof value === 'string' && value.trim()) {
+                    params.set(key, value)
                 }
             })
+            params.set('section', 'locations')
+
+            res.redirect(303, `/market-ops/setup?${params.toString()}`)
         } catch (err) {
             next(err)
         }
@@ -849,7 +1100,10 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
                         location: null,
                         formAction: '/market-ops/locations/create',
                         formValues: buildLocationFormValues(),
-                        flash: resolveNotice(req.query)
+                        flash: resolveNotice(req.query),
+                        helpers: {
+                            isCheckedValue
+                        }
                     }
                 }
             })
@@ -859,7 +1113,7 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
     })
 
     router.post('/locations/create', async (req, res, next) => {
-        const formValues = buildLocationFormValues(req.body)
+        const formValues = buildLocationFormValues(req.body, { isActiveFallback: '0' })
 
         try {
             const createdLocation = await marketSetupService.createLocation(
@@ -893,6 +1147,9 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
                                     err,
                                     'We could not create that location.'
                                 )
+                            },
+                            helpers: {
+                                isCheckedValue
                             }
                         }
                     }
@@ -940,7 +1197,10 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
                         location,
                         formAction: `/market-ops/locations/${location.locationId}`,
                         formValues: buildLocationFormValues(location),
-                        flash: resolveNotice(req.query)
+                        flash: resolveNotice(req.query),
+                        helpers: {
+                            isCheckedValue
+                        }
                     }
                 }
             })
@@ -963,7 +1223,7 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
             return
         }
 
-        const formValues = buildLocationFormValues(req.body)
+        const formValues = buildLocationFormValues(req.body, { isActiveFallback: '0' })
 
         try {
             const existingLocation = await marketSetupService.getLocationById(locationId)
@@ -1014,6 +1274,9 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
                                     err,
                                     'We could not update that location.'
                                 )
+                            },
+                            helpers: {
+                                isCheckedValue
                             }
                         }
                     }
@@ -1076,7 +1339,7 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
     })
 
     router.post('/market-groups/create', async (req, res, next) => {
-        const formValues = buildMarketGroupFormValues(req.body)
+        const formValues = buildMarketGroupFormValues(req.body, { isPublicFallback: '0' })
 
         try {
             const createdMarketGroup = await marketSetupService.createMarketGroup(
@@ -1184,7 +1447,7 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
             return
         }
 
-        const formValues = buildMarketGroupFormValues(req.body)
+        const formValues = buildMarketGroupFormValues(req.body, { isPublicFallback: '0' })
 
         try {
             const existingMarketGroup = await marketSetupService.getMarketGroupById(groupId)
@@ -1320,7 +1583,10 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
             return
         }
 
-        const formValues = buildMarketFormValues(req.body)
+        const formValues = buildMarketFormValues(req.body, {
+            applicationsOpenFallback: '0',
+            isPublicFallback: '0'
+        })
 
         try {
             const createdMarketDetail = await marketSetupService.createMarket(
@@ -1467,7 +1733,10 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
             return
         }
 
-        const formValues = buildMarketFormValues(req.body)
+        const formValues = buildMarketFormValues(req.body, {
+            applicationsOpenFallback: '0',
+            isPublicFallback: '0'
+        })
 
         try {
             const currentMarketDetail = await marketSetupService.getMarketDetailById(marketId)
@@ -1563,7 +1832,9 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
                 return
             }
 
-            const offeringFormValues = buildMarketBoothOfferingFormValues(req.body)
+            const offeringFormValues = buildMarketBoothOfferingFormValues(req.body, {
+                isActiveFallback: '0'
+            })
 
             try {
                 const currentMarketDetail = await marketSetupService.getMarketDetailById(marketId)
@@ -1680,7 +1951,9 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
                     return
                 }
 
-                const offeringFormValues = buildMarketBoothOfferingFormValues(req.body)
+                const offeringFormValues = buildMarketBoothOfferingFormValues(req.body, {
+                    isActiveFallback: '0'
+                })
 
                 await marketSetupService.updateMarketBoothOfferingById(
                     offeringId,

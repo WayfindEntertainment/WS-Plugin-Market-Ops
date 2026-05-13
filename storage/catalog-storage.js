@@ -683,7 +683,7 @@ export async function getBoothTypeById(queryable, boothTypeId) {
 }
 
 /**
- * List booth types in display order.
+ * List booth types with active records first, then sort order and label.
  *
  * @param {{ query: (sql: string, params?: unknown[]) => Promise<unknown> }} queryable - Query seam.
  * @returns {Promise<Array<ReturnType<typeof mapBoothTypeRow>>>} Booth types.
@@ -704,7 +704,7 @@ export async function listBoothTypes(queryable) {
             updated_at,
             updated_by_user_id
         FROM market_ops_booth_types
-        ORDER BY sort_order ASC, label ASC, booth_type_id ASC
+        ORDER BY is_active DESC, sort_order ASC, label ASC, booth_type_id ASC
         `
     )
 

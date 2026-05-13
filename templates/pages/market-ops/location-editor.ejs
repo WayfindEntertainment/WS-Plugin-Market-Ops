@@ -4,6 +4,8 @@
     const location = editor.location || null
     const mode = editor.mode || 'create'
     const pageTitle = mode === 'create' ? 'Create Location' : (location?.locationName || 'Edit Location')
+    const helpers = editor.helpers || {}
+    const isChecked = typeof helpers.isCheckedValue === 'function' ? helpers.isCheckedValue : (() => false)
 %>
 
 <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
@@ -30,35 +32,50 @@
                     <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
                     <div class="col-12 col-md-6">
                         <label class="form-label" for="location-name">Location Name</label>
-                        <input id="location-name" class="form-control" type="text" name="locationName" value="<%= formValues.locationName || '' %>" required />
+                        <input id="location-name" class="form-control" type="text" name="locationName" value="<%= formValues.locationName || '' %>" maxlength="255" required />
                     </div>
                     <div class="col-12 col-md-6">
                         <label class="form-label" for="location-slug">Slug</label>
-                        <input id="location-slug" class="form-control" type="text" name="slug" value="<%= formValues.slug || '' %>" required />
+                        <input id="location-slug" class="form-control" type="text" name="slug" value="<%= formValues.slug || '' %>" maxlength="128" required />
                     </div>
                     <div class="col-12">
                         <label class="form-label" for="location-address-line-1">Address Line 1</label>
-                        <input id="location-address-line-1" class="form-control" type="text" name="addressLine1" value="<%= formValues.addressLine1 || '' %>" />
+                        <input id="location-address-line-1" class="form-control" type="text" name="addressLine1" value="<%= formValues.addressLine1 || '' %>" maxlength="255" />
                     </div>
                     <div class="col-12">
                         <label class="form-label" for="location-address-line-2">Address Line 2</label>
-                        <input id="location-address-line-2" class="form-control" type="text" name="addressLine2" value="<%= formValues.addressLine2 || '' %>" />
+                        <input id="location-address-line-2" class="form-control" type="text" name="addressLine2" value="<%= formValues.addressLine2 || '' %>" maxlength="255" />
                     </div>
                     <div class="col-12 col-md-4">
                         <label class="form-label" for="location-city">City</label>
-                        <input id="location-city" class="form-control" type="text" name="city" value="<%= formValues.city || '' %>" />
+                        <input id="location-city" class="form-control" type="text" name="city" value="<%= formValues.city || '' %>" maxlength="128" />
                     </div>
                     <div class="col-12 col-md-4">
-                        <label class="form-label" for="location-state-code">State</label>
-                        <input id="location-state-code" class="form-control" type="text" name="stateCode" value="<%= formValues.stateCode || '' %>" />
+                        <label class="form-label" for="location-state-code">State Code</label>
+                        <input id="location-state-code" class="form-control text-uppercase" type="text" name="stateCode" value="<%= formValues.stateCode || '' %>" maxlength="2" pattern="[A-Za-z]{2}" title="Use a 2-letter state code such as WA" />
                     </div>
                     <div class="col-12 col-md-4">
                         <label class="form-label" for="location-postal-code">Postal Code</label>
-                        <input id="location-postal-code" class="form-control" type="text" name="postalCode" value="<%= formValues.postalCode || '' %>" />
+                        <input id="location-postal-code" class="form-control" type="text" name="postalCode" value="<%= formValues.postalCode || '' %>" maxlength="32" />
                     </div>
                     <div class="col-12">
                         <label class="form-label" for="location-public-notes">Public Notes</label>
                         <textarea id="location-public-notes" class="form-control" rows="4" name="publicNotes"><%= formValues.publicNotes || '' %></textarea>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input
+                                id="location-is-active"
+                                class="form-check-input"
+                                type="checkbox"
+                                name="isActive"
+                                value="1"
+                                <%= isChecked(formValues.isActive) ? 'checked' : '' %>
+                            />
+                            <label class="form-check-label" for="location-is-active">
+                                Active and available for reuse in new setup work
+                            </label>
+                        </div>
                     </div>
                     <div class="col-12">
                         <button class="btn btn-primary" type="submit">

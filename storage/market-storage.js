@@ -32,6 +32,7 @@ const FEE_MODES = ['none', 'per_group', 'per_market']
  *   stateCode: string|null,
  *   postalCode: string|null,
  *   publicNotes: string|null,
+ *   isActive: number,
  *   createdAt: number,
  *   createdByUserId: number|null,
  *   updatedAt: number,
@@ -49,6 +50,7 @@ function mapLocationRow(row) {
         stateCode: typeof row.state_code === 'string' ? row.state_code : null,
         postalCode: typeof row.postal_code === 'string' ? row.postal_code : null,
         publicNotes: typeof row.public_notes === 'string' ? row.public_notes : null,
+        isActive: Number(row.is_active),
         createdAt: Number(row.created_at),
         createdByUserId: typeof row.created_by_user_id === 'number' ? row.created_by_user_id : null,
         updatedAt: Number(row.updated_at),
@@ -190,6 +192,7 @@ function mapMarketBoothOfferingRow(row) {
  *   stateCode: string|null,
  *   postalCode: string|null,
  *   publicNotes: string|null,
+ *   isActive: 0|1,
  *   createdAt: number,
  *   createdByUserId: number|null,
  *   updatedAt: number,
@@ -252,6 +255,14 @@ function normalizeLocationInput(input, existingRecord) {
                       normalizedInput.publicNotes,
                       'publicNotes',
                       'INVALID_LOCATION_PUBLIC_NOTES'
+                  ),
+        isActive:
+            typeof normalizedInput.isActive === 'undefined'
+                ? /** @type {0|1} */ (existingRecord?.isActive ?? 1)
+                : normalizeBooleanFlag(
+                      normalizedInput.isActive,
+                      'isActive',
+                      'INVALID_LOCATION_IS_ACTIVE'
                   ),
         createdAt:
             typeof normalizedInput.createdAt === 'undefined'
@@ -679,6 +690,7 @@ async function readLocationById(queryable, locationId) {
             state_code,
             postal_code,
             public_notes,
+            is_active,
             created_at,
             created_by_user_id,
             updated_at,
@@ -822,11 +834,12 @@ export async function insertLocation(queryable, input) {
             state_code,
             postal_code,
             public_notes,
+            is_active,
             created_at,
             created_by_user_id,
             updated_at,
             updated_by_user_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
             normalizedInput.slug,
@@ -837,6 +850,7 @@ export async function insertLocation(queryable, input) {
             normalizedInput.stateCode,
             normalizedInput.postalCode,
             normalizedInput.publicNotes,
+            normalizedInput.isActive,
             normalizedInput.createdAt,
             normalizedInput.createdByUserId,
             normalizedInput.updatedAt,
@@ -875,7 +889,7 @@ export async function getLocationById(queryable, locationId) {
 }
 
 /**
- * List locations in name order.
+ * List locations with active records first, then alphabetical by name.
  *
  * @param {{ query: (sql: string, params?: unknown[]) => Promise<unknown> }} queryable - Query seam.
  * @returns {Promise<Array<ReturnType<typeof mapLocationRow>>>} Locations.
@@ -894,12 +908,13 @@ export async function listLocations(queryable) {
             state_code,
             postal_code,
             public_notes,
+            is_active,
             created_at,
             created_by_user_id,
             updated_at,
             updated_by_user_id
         FROM market_ops_locations
-        ORDER BY location_name ASC, location_id ASC
+        ORDER BY is_active DESC, location_name ASC, location_id ASC
         `
     )
 
@@ -943,6 +958,7 @@ export async function updateLocationById(queryable, locationId, input) {
             state_code = ?,
             postal_code = ?,
             public_notes = ?,
+            is_active = ?,
             created_at = ?,
             created_by_user_id = ?,
             updated_at = ?,
@@ -958,6 +974,7 @@ export async function updateLocationById(queryable, locationId, input) {
             normalizedInput.stateCode,
             normalizedInput.postalCode,
             normalizedInput.publicNotes,
+            normalizedInput.isActive,
             normalizedInput.createdAt,
             normalizedInput.createdByUserId,
             normalizedInput.updatedAt,

@@ -220,31 +220,39 @@ Canonical physical venue/location records.
 > - A market references one location.
 > - The launch pass keeps address/contact information directly on the location row.
 
-| KEY | FIELD              |           TYPE | REQUIRED | DEFAULT | DESCRIPTION                                       |
-| --- | ------------------ | -------------: | :------: | ------- | ------------------------------------------------- |
-| PK  | location_id        | `INT UNSIGNED` |   YES    | AI      | Stable location identifier.                       |
-| UK  | slug               | `VARCHAR(128)` |   YES    |         | Stable slug for future public/admin URLs if used. |
-|     | location_name      | `VARCHAR(255)` |   YES    |         | Human-readable location name.                     |
-|     | address_line_1     | `VARCHAR(255)` |          |         | Street address line 1.                            |
-|     | address_line_2     | `VARCHAR(255)` |          |         | Street address line 2.                            |
-|     | city               | `VARCHAR(128)` |          |         | City or locality.                                 |
-|     | state_code         |      `CHAR(2)` |          |         | State code such as `WA`.                          |
-|     | postal_code        |  `VARCHAR(32)` |          |         | Postal code.                                      |
-|     | public_notes       |         `TEXT` |          |         | Optional public-facing or admin-friendly notes.   |
-|     | created_at         |       `BIGINT` |   YES    |         | Epoch ms when the location row was created.       |
-| FK  | created_by_user_id | `INT UNSIGNED` |          |         | Optional kernel user that created the row.        |
-|     | updated_at         |       `BIGINT` |   YES    |         | Epoch ms when the location row was last updated.  |
-| FK  | updated_by_user_id | `INT UNSIGNED` |          |         | Optional kernel user that last updated the row.   |
+| KEY | FIELD              |           TYPE | REQUIRED | DEFAULT | DESCRIPTION                                           |
+| --- | ------------------ | -------------: | :------: | ------- | ----------------------------------------------------- |
+| PK  | location_id        | `INT UNSIGNED` |   YES    | AI      | Stable location identifier.                           |
+| UK  | slug               | `VARCHAR(128)` |   YES    |         | Stable slug for future public/admin URLs if used.     |
+|     | location_name      | `VARCHAR(255)` |   YES    |         | Human-readable location name.                         |
+|     | address_line_1     | `VARCHAR(255)` |          |         | Street address line 1.                                |
+|     | address_line_2     | `VARCHAR(255)` |          |         | Street address line 2.                                |
+|     | city               | `VARCHAR(128)` |          |         | City or locality.                                     |
+|     | state_code         |      `CHAR(2)` |          |         | State code such as `WA`.                              |
+|     | postal_code        |  `VARCHAR(32)` |          |         | Postal code.                                          |
+|     | public_notes       |         `TEXT` |          |         | Optional public-facing or admin-friendly notes.       |
+|     | is_active          |   `TINYINT(1)` |   YES    | `1`     | Whether the location remains available for new setup. |
+|     | created_at         |       `BIGINT` |   YES    |         | Epoch ms when the location row was created.           |
+| FK  | created_by_user_id | `INT UNSIGNED` |          |         | Optional kernel user that created the row.            |
+|     | updated_at         |       `BIGINT` |   YES    |         | Epoch ms when the location row was last updated.      |
+| FK  | updated_by_user_id | `INT UNSIGNED` |          |         | Optional kernel user that last updated the row.       |
 
 **Indexes / constraints**
 
 - Primary key on `location_id`.
 - Unique key on `slug`.
 - Index on `(location_name)`.
+- Index on `(is_active, location_name)`.
 - Foreign key `created_by_user_id` -> `kernel_users.user_id` (`ON DELETE SET NULL`,
   `ON UPDATE RESTRICT`).
 - Foreign key `updated_by_user_id` -> `kernel_users.user_id` (`ON DELETE SET NULL`,
   `ON UPDATE RESTRICT`).
+
+> Notes:
+>
+> - Inactive locations are preserved for historical references and existing market relationships.
+> - Inactive locations should no longer be used for new setup by default, even though the first
+>   implementation pass may still show them in admin selectors.
 
 ---
 

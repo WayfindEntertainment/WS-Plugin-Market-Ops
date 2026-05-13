@@ -3,6 +3,8 @@
 import { jest } from '@jest/globals'
 
 import {
+    buildBoothTypeInputFromFormValues,
+    buildBoothTypeFormValues,
     buildLocationInputFromFormValues,
     buildLocationFormValues,
     buildMarketBoothOfferingInputFromFormValues,
@@ -85,7 +87,8 @@ describe('Market Ops route helpers', () => {
             city: '',
             stateCode: '',
             postalCode: '',
-            publicNotes: 'Indoor only'
+            publicNotes: 'Indoor only',
+            isActive: '1'
         })
 
         expect(buildLocationInputFromFormValues(formValues, 9)).toEqual({
@@ -97,9 +100,82 @@ describe('Market Ops route helpers', () => {
             stateCode: null,
             postalCode: null,
             publicNotes: 'Indoor only',
+            isActive: 1,
             createdByUserId: 9,
             updatedByUserId: 9
         })
+    })
+
+    test('buildLocationFormValues and buildLocationInputFromFormValues preserve inactive state', () => {
+        const formValues = buildLocationFormValues({
+            slug: 'crossroads-outside',
+            locationName: 'Crossroads Outside',
+            isActive: '0'
+        })
+
+        expect(formValues.isActive).toBe('0')
+        expect(buildLocationInputFromFormValues(formValues, 12).isActive).toBe(0)
+    })
+
+    test('buildLocationFormValues treats a missing checkbox as inactive during post parsing', () => {
+        const formValues = buildLocationFormValues(
+            {
+                slug: 'crossroads-outside',
+                locationName: 'Crossroads Outside'
+            },
+            { isActiveFallback: '0' }
+        )
+
+        expect(formValues.isActive).toBe('0')
+    })
+
+    test('buildLocationInputFromFormValues normalizes state codes to uppercase', () => {
+        const input = buildLocationInputFromFormValues(
+            buildLocationFormValues({
+                slug: 'crossroads-inside',
+                locationName: 'Crossroads Inside',
+                stateCode: 'wa'
+            }),
+            9
+        )
+
+        expect(input.stateCode).toBe('WA')
+    })
+
+    test('buildLocationInputFromFormValues rejects invalid state codes before hitting MySQL', () => {
+        expect(() =>
+            buildLocationInputFromFormValues(
+                buildLocationFormValues({
+                    slug: 'crossroads-inside',
+                    locationName: 'Crossroads Inside',
+                    stateCode: 'Washington'
+                }),
+                9
+            )
+        ).toThrow('State must be a 2-letter code such as WA')
+    })
+
+    test('buildLocationInputFromFormValues rejects overlong schema-backed strings', () => {
+        expect(() =>
+            buildLocationInputFromFormValues(
+                buildLocationFormValues({
+                    slug: 'x'.repeat(129),
+                    locationName: 'Crossroads Inside'
+                }),
+                9
+            )
+        ).toThrow('Slug must be 128 characters or fewer')
+
+        expect(() =>
+            buildLocationInputFromFormValues(
+                buildLocationFormValues({
+                    slug: 'crossroads-inside',
+                    locationName: 'Crossroads Inside',
+                    postalCode: 'x'.repeat(33)
+                }),
+                9
+            )
+        ).toThrow('Postal code must be 32 characters or fewer')
     })
 
     test('buildMarketGroupInputFromFormValues parses fee settings and public flag', () => {
@@ -173,6 +249,43 @@ describe('Market Ops route helpers', () => {
         })
     })
 
+    test('buildBoothTypeFormValues treats a missing checkbox as inactive during post parsing', () => {
+        const formValues = buildBoothTypeFormValues(
+            {
+                slug: 'parking-space',
+                label: 'Parking Space',
+                sortOrder: '0'
+            },
+            { isActiveFallback: '0' }
+        )
+
+        expect(formValues.isActive).toBe('0')
+    })
+
+    test('buildBoothTypeInputFromFormValues rejects overlong schema-backed strings', () => {
+        expect(() =>
+            buildBoothTypeInputFromFormValues(
+                buildBoothTypeFormValues({
+                    slug: 'x'.repeat(129),
+                    label: 'Parking Space',
+                    sortOrder: '0'
+                }),
+                4
+            )
+        ).toThrow('Slug must be 128 characters or fewer')
+
+        expect(() =>
+            buildBoothTypeInputFromFormValues(
+                buildBoothTypeFormValues({
+                    slug: 'parking-space',
+                    label: 'x'.repeat(256),
+                    sortOrder: '0'
+                }),
+                4
+            )
+        ).toThrow('Label must be 255 characters or fewer')
+    })
+
     test('resolveNotice returns mapped success flashes', () => {
         expect(resolveNotice({ notice: 'market-created' })).toEqual({
             type: 'success',
@@ -210,6 +323,8 @@ describe('createMarketOpsPublicRouter', () => {
                 '/setup',
                 '/vendors',
                 '/applications',
+                '/booth-types/create',
+                '/booth-types/:boothTypeId',
                 '/locations',
                 '/locations/create',
                 '/market-groups',
@@ -218,7 +333,12 @@ describe('createMarketOpsPublicRouter', () => {
             ])
         )
         expect(router.records.post.map((route) => route.path)).toEqual(
-            expect.arrayContaining(['/booth-types', '/locations/create', '/market-groups/create'])
+            expect.arrayContaining([
+                '/booth-types/create',
+                '/booth-types/:boothTypeId',
+                '/locations/create',
+                '/market-groups/create'
+            ])
         )
     })
 
@@ -283,7 +403,7 @@ describe('createMarketOpsPublicRouter', () => {
 
         const setupRoute = router.records.get.find((route) => route.path === '/setup')
         const req = {
-            query: {},
+            query: { section: 'booth_types' },
             user: { user_id: 1 }
         }
         const res = {
@@ -300,12 +420,47 @@ describe('createMarketOpsPublicRouter', () => {
                 page: 'pages/market-ops/setup',
                 surface: 'public',
                 locals: expect.objectContaining({
+                    marketOpsSetupActiveSection: 'booth_types',
                     marketOpsSetupPageData: {
                         locations: [{ locationId: 2, locationName: 'Crossroads' }],
                         boothTypes: [{ boothTypeId: 3, label: "8'x8'" }]
                     }
                 })
             })
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('redirects the legacy locations route to setup with the locations section active', async () => {
+        const router = createRouterRecorder()
+        const sdk = createSdk(router, jest.fn())
+
+        createMarketOpsPublicRouter(sdk, {
+            marketSetupService: {
+                listLocations: jest.fn(),
+                listMarketGroups: jest.fn(),
+                listMarketsByMarketGroupId: jest.fn(),
+                listBoothTypes: jest.fn()
+            }
+        })
+
+        const locationsRoute = router.records.get.find((route) => route.path === '/locations')
+        const req = {
+            query: {
+                notice: 'location-created'
+            },
+            user: { user_id: 1 }
+        }
+        const res = {
+            redirect: jest.fn()
+        }
+        const next = jest.fn()
+
+        await locationsRoute.handlers.at(-1)(req, res, next)
+
+        expect(res.redirect).toHaveBeenCalledWith(
+            303,
+            '/market-ops/setup?notice=location-created&section=locations'
         )
         expect(next).not.toHaveBeenCalled()
     })
@@ -349,7 +504,137 @@ describe('createMarketOpsPublicRouter', () => {
         expect(next).not.toHaveBeenCalled()
     })
 
-    test('creates a booth type and redirects back to setup', async () => {
+    test('creates a location as inactive when the active checkbox is unchecked', async () => {
+        const router = createRouterRecorder()
+        const sdk = createSdk(router, jest.fn())
+        const marketSetupService = {
+            createLocation: jest.fn(async () => ({ locationId: 12 }))
+        }
+
+        createMarketOpsPublicRouter(sdk, { marketSetupService })
+
+        const route = router.records.post.find((entry) => entry.path === '/locations/create')
+        const req = {
+            body: {
+                slug: 'crossroads-inside',
+                locationName: 'Crossroads Inside'
+            },
+            user: { user_id: 7 }
+        }
+        const res = {
+            redirect: jest.fn()
+        }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(marketSetupService.createLocation).toHaveBeenCalledWith(
+            expect.objectContaining({
+                isActive: 0
+            })
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('renders the location editor with the stored active state in form values', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage)
+        const marketSetupService = {
+            getLocationById: jest.fn(async () => ({
+                locationId: 12,
+                slug: 'crossroads-inside',
+                locationName: 'Crossroads Inside',
+                addressLine1: null,
+                addressLine2: null,
+                city: null,
+                stateCode: null,
+                postalCode: null,
+                publicNotes: null,
+                isActive: 0
+            }))
+        }
+
+        createMarketOpsPublicRouter(sdk, { marketSetupService })
+
+        const route = router.records.get.find((entry) => entry.path === '/locations/:locationId')
+        const req = {
+            params: { locationId: '12' },
+            query: {},
+            user: { user_id: 1 }
+        }
+        const res = {
+            status: jest.fn().mockReturnThis()
+        }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(renderPage).toHaveBeenCalledWith(
+            req,
+            res,
+            expect.objectContaining({
+                page: 'pages/market-ops/location-editor',
+                locals: expect.objectContaining({
+                    marketOpsLocationEditor: expect.objectContaining({
+                        formValues: expect.objectContaining({
+                            isActive: '0'
+                        })
+                    })
+                })
+            })
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('renders the booth type editor with the stored active state in form values', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage)
+        const marketSetupService = {
+            getBoothTypeById: jest.fn(async () => ({
+                boothTypeId: 9,
+                slug: '8x8',
+                label: "8'x8'",
+                description: 'Square booth',
+                isActive: 0,
+                sortOrder: 3
+            }))
+        }
+
+        createMarketOpsPublicRouter(sdk, { marketSetupService })
+
+        const route = router.records.get.find((entry) => entry.path === '/booth-types/:boothTypeId')
+        const req = {
+            params: { boothTypeId: '9' },
+            query: {},
+            user: { user_id: 1 }
+        }
+        const res = {
+            status: jest.fn().mockReturnThis()
+        }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(renderPage).toHaveBeenCalledWith(
+            req,
+            res,
+            expect.objectContaining({
+                page: 'pages/market-ops/booth-type-editor',
+                locals: expect.objectContaining({
+                    marketOpsBoothTypeEditor: expect.objectContaining({
+                        formValues: expect.objectContaining({
+                            isActive: '0'
+                        })
+                    })
+                })
+            })
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('creates a booth type and redirects to its detail page', async () => {
         const router = createRouterRecorder()
         const sdk = createSdk(router, jest.fn())
         const marketSetupService = {
@@ -358,7 +643,7 @@ describe('createMarketOpsPublicRouter', () => {
 
         createMarketOpsPublicRouter(sdk, { marketSetupService })
 
-        const route = router.records.post.find((entry) => entry.path === '/booth-types')
+        const route = router.records.post.find((entry) => entry.path === '/booth-types/create')
         const req = {
             body: {
                 slug: '8x8',
@@ -385,7 +670,88 @@ describe('createMarketOpsPublicRouter', () => {
         )
         expect(res.redirect).toHaveBeenCalledWith(
             303,
-            '/market-ops/setup?notice=booth-type-created'
+            '/market-ops/booth-types/9?notice=booth-type-created'
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('creates a booth type as inactive when the active checkbox is unchecked', async () => {
+        const router = createRouterRecorder()
+        const sdk = createSdk(router, jest.fn())
+        const marketSetupService = {
+            createBoothType: jest.fn(async () => ({ boothTypeId: 9 }))
+        }
+
+        createMarketOpsPublicRouter(sdk, { marketSetupService })
+
+        const route = router.records.post.find((entry) => entry.path === '/booth-types/create')
+        const req = {
+            body: {
+                slug: 'parking-space',
+                label: 'Parking Space',
+                sortOrder: '0'
+            },
+            user: { user_id: 7 }
+        }
+        const res = {
+            redirect: jest.fn()
+        }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(marketSetupService.createBoothType).toHaveBeenCalledWith(
+            expect.objectContaining({
+                isActive: 0
+            })
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('updates a booth type as inactive when the active checkbox is unchecked', async () => {
+        const router = createRouterRecorder()
+        const sdk = createSdk(router, jest.fn())
+        const marketSetupService = {
+            getBoothTypeById: jest.fn(async () => ({
+                boothTypeId: 9,
+                slug: '8x8',
+                label: "8'x8'",
+                description: 'Square booth',
+                isActive: 1,
+                sortOrder: 3
+            })),
+            updateBoothTypeById: jest.fn(async () => ({
+                boothTypeId: 9
+            }))
+        }
+
+        createMarketOpsPublicRouter(sdk, { marketSetupService })
+
+        const route = router.records.post.find(
+            (entry) => entry.path === '/booth-types/:boothTypeId'
+        )
+        const req = {
+            params: { boothTypeId: '9' },
+            body: {
+                slug: '8x8',
+                label: "8'x8'",
+                description: 'Square booth',
+                sortOrder: '3'
+            },
+            user: { user_id: 7 }
+        }
+        const res = {
+            redirect: jest.fn()
+        }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(marketSetupService.updateBoothTypeById).toHaveBeenCalledWith(
+            9,
+            expect.objectContaining({
+                isActive: 0
+            })
         )
         expect(next).not.toHaveBeenCalled()
     })

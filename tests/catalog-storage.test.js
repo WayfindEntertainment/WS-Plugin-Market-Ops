@@ -206,6 +206,11 @@ describe('catalog-storage', () => {
             })
         )
         await expect(listBoothTypes(queryable)).resolves.toHaveLength(1)
+        expect(queryable.query).toHaveBeenCalledWith(
+            expect.stringContaining(
+                'ORDER BY is_active DESC, sort_order ASC, label ASC, booth_type_id ASC'
+            )
+        )
         await expect(
             updateBoothTypeById(queryable, 6, {
                 label: 'Parking Space XL',
