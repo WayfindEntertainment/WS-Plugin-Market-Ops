@@ -49,4 +49,18 @@ describe('Market Ops plugin declaration', () => {
             })
         ])
     })
+
+    test('declares only one public /market-ops mount alongside vendor public routes', () => {
+        expect(marketOpsPlugin.routes.public).toEqual([
+            expect.objectContaining({
+                staticMountPath: '/market-ops'
+            }),
+            expect.objectContaining({
+                staticMountPath: '/new-vendors'
+            }),
+            expect.objectContaining({
+                staticMountPath: '/vendors'
+            })
+        ])
+    })
 })

@@ -1,33 +1,60 @@
 <%
     const pageData = marketOpsVendorsPageData || {}
+    const vendorCards = Array.isArray(pageData.vendorCards) ? pageData.vendorCards : []
 %>
 
-<div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+<div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3 mb-4">
     <div>
-        <h1 class="h3 m-0">Vendors</h1>
+        <h1 class="h3 mb-2">Vendors</h1>
         <p class="text-body-secondary mb-0">
-            This section will hold vendor review, ownership management, and business approval flows.
+            Review vendor business profiles, prioritize pending approvals, and open each record for approval notes or status changes.
         </p>
     </div>
 </div>
 
 <%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash: pageData.flash }) %>
 
-<section class="row g-3">
-    <div class="col-12 col-xl-8">
-        <div class="card">
-            <div class="card-body">
-                <h2 class="h5 mb-3">Planned Scope</h2>
-                <p class="mb-3">
-                    The route exists now so the sidebar model stays stable while the vendor-management workflow is built out.
-                </p>
-                <ul class="mb-3">
-                    <li>Review vendor business profiles and ownership</li>
-                    <li>Approve or reject businesses before they can apply</li>
-                    <li>Inspect assigned product categories</li>
-                </ul>
-                <a class="btn btn-outline-primary" href="/market-ops">Back to Overview</a>
+<div class="row g-3">
+    <% if (vendorCards.length === 0) { %>
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-body-secondary">
+                    No vendor business profiles have been created yet.
+                </div>
             </div>
         </div>
-    </div>
-</section>
+    <% } %>
+    <% vendorCards.forEach((vendorCard) => { %>
+        <%
+            const vendorApprovalStatus = vendorCard.approvalStatus || 'pending'
+            const approvalStatusBadgeClass =
+                vendorApprovalStatus === 'approved'
+                    ? 'text-bg-success'
+                    : vendorApprovalStatus === 'rejected'
+                      ? 'text-bg-danger'
+                      : 'text-bg-secondary'
+        %>
+        <div class="col-12 col-xxl-8">
+            <a class="card text-decoration-none text-reset h-100" href="/market-ops/vendors/<%= vendorCard.vendorBusinessId %>">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between gap-3 mb-2">
+                        <h2 class="h5 mb-0"><%= vendorCard.businessName %></h2>
+                        <span class="badge <%= approvalStatusBadgeClass %> text-uppercase"><%= vendorApprovalStatus %></span>
+                    </div>
+                    <% if (vendorCard.categoryLabels.length > 0) { %>
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            <% vendorCard.categoryLabels.forEach((categoryLabel) => { %>
+                                <span class="badge text-bg-light border"><%= categoryLabel %></span>
+                            <% }) %>
+                        </div>
+                    <% } %>
+                    <% if (vendorApprovalStatus !== 'approved') { %>
+                        <p class="text-body-secondary mb-0">
+                            <%= vendorCard.approvalNotes || 'Open this record to review the full vendor profile and set approval notes.' %>
+                        </p>
+                    <% } %>
+                </div>
+            </a>
+        </div>
+    <% }) %>
+</div>

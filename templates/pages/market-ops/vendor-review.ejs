@@ -1,0 +1,203 @@
+<%
+    const pageData = marketOpsVendorReviewPageData || {}
+    const detail = pageData.vendorDetail || {}
+    const vendorBusiness = detail.vendorBusiness || {}
+    const ownerProfiles = Array.isArray(pageData.ownerProfiles) ? pageData.ownerProfiles : []
+    const categoryAssignments = Array.isArray(detail.productCategoryAssignments)
+        ? detail.productCategoryAssignments
+        : []
+    const canManageVendorBusiness = pageData.canManageVendorBusiness === true
+    const vendorApprovalStatus = vendorBusiness.approvalStatus || 'pending'
+    const approvalStatusBadgeClass =
+        vendorApprovalStatus === 'approved'
+            ? 'text-bg-success'
+            : vendorApprovalStatus === 'rejected'
+              ? 'text-bg-danger'
+              : 'text-bg-secondary'
+    const websiteUrl =
+        typeof vendorBusiness.websiteUrl === 'string' && vendorBusiness.websiteUrl.trim().length > 0
+            ? vendorBusiness.websiteUrl.trim()
+            : ''
+    const websiteHref = websiteUrl
+        ? /^(https?:)?\/\//i.test(websiteUrl)
+            ? websiteUrl
+            : `https://${websiteUrl}`
+        : ''
+
+    function formatPhoneNumber(phone) {
+        const normalizedPhone = typeof phone === 'string' ? phone.trim() : ''
+        const digits = normalizedPhone.replace(/\D/g, '')
+
+        if (digits.length === 10) {
+            return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+        }
+
+        if (digits.length === 11 && digits.startsWith('1')) {
+            return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`
+        }
+
+        return normalizedPhone
+    }
+%>
+
+<div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3 mb-4">
+    <div>
+        <a class="text-decoration-none small d-inline-block mb-2" href="/market-ops/vendors">Back to Vendors</a>
+        <h1 class="h3 mb-2"><%= vendorBusiness.businessName || 'Vendor Review' %></h1>
+        <p class="text-body-secondary mb-0">
+            Review the vendor profile, attached owners, and product categories before approving or rejecting.
+        </p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <% if (canManageVendorBusiness && vendorBusiness.slug) { %>
+            <a class="btn btn-outline-primary" href="/vendors/<%= vendorBusiness.slug %>/manage">Manage Business</a>
+        <% } %>
+    </div>
+</div>
+
+<%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash: pageData.flash }) %>
+
+<section class="row g-4">
+    <div class="col-12 col-xxl-8">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="h5 mb-1">Vendor Profile</h2>
+                <p class="text-body-secondary small mb-0">Business-facing data the vendor manages directly.</p>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-3">Slug</dt>
+                    <dd class="col-sm-9"><%= vendorBusiness.slug || '—' %></dd>
+                    <dt class="col-sm-3">Legal Name</dt>
+                    <dd class="col-sm-9"><%= vendorBusiness.legalName || '—' %></dd>
+                    <dt class="col-sm-3">Email</dt>
+                    <dd class="col-sm-9">
+                        <% if (vendorBusiness.email) { %>
+                            <a href="mailto:<%= vendorBusiness.email %>"><%= vendorBusiness.email %></a>
+                        <% } else { %>
+                            —
+                        <% } %>
+                    </dd>
+                    <dt class="col-sm-3">Phone</dt>
+                    <dd class="col-sm-9"><%= vendorBusiness.phone ? formatPhoneNumber(vendorBusiness.phone) : '—' %></dd>
+                    <dt class="col-sm-3">Website</dt>
+                    <dd class="col-sm-9">
+                        <% if (websiteUrl) { %>
+                            <a href="<%= websiteHref %>" target="_blank" rel="noreferrer"><%= websiteUrl %></a>
+                        <% } else { %>
+                            —
+                        <% } %>
+                    </dd>
+                    <dt class="col-sm-3">Tag Line</dt>
+                    <dd class="col-sm-9"><%= vendorBusiness.summary || '—' %></dd>
+                    <dt class="col-sm-3">Description</dt>
+                    <dd class="col-sm-9"><%= vendorBusiness.description || '—' %></dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h2 class="h5 mb-1">Product Categories</h2>
+                <p class="text-body-secondary small mb-0">
+                    The vendor-selected categories used for review and future directory filtering.
+                </p>
+            </div>
+            <div class="card-body">
+                <% if (categoryAssignments.length === 0) { %>
+                    <p class="text-body-secondary mb-0">No product categories are assigned yet.</p>
+                <% } else { %>
+                    <div class="d-flex flex-wrap gap-2">
+                        <% categoryAssignments.forEach((assignment) => { if (assignment.category) { %>
+                            <span class="badge text-bg-light border">
+                                <%= assignment.category.label %><%= assignment.isPrimary === 1 ? ' · Primary' : '' %>
+                            </span>
+                        <% } }) %>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xxl-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="h5 mb-1">Owners</h2>
+                <p class="text-body-secondary small mb-0">Users who currently control this vendor business.</p>
+            </div>
+            <div class="card-body">
+                <% if (ownerProfiles.length === 0) { %>
+                    <p class="text-body-secondary mb-0">No owners are attached yet.</p>
+                <% } else { %>
+                    <div class="d-flex flex-column gap-3">
+                        <% ownerProfiles.forEach((ownerProfile) => { %>
+                            <div>
+                                <div class="fw-semibold"><%= ownerProfile.displayName %></div>
+                                <div class="small text-body-secondary">
+                                    <% if (ownerProfile.email) { %>
+                                        <a href="mailto:<%= ownerProfile.email %>"><%= ownerProfile.email %></a>
+                                    <% } else { %>
+                                        <%= `User #${ownerProfile.userId}` %>
+                                    <% } %>
+                                </div>
+                            </div>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header d-flex align-items-start justify-content-between gap-3">
+                <div>
+                    <h2 class="h5 mb-1">Vendor Approval</h2>
+                    <p class="text-body-secondary small mb-0">
+                        Move the vendor between pending, approved, and rejected states.
+                    </p>
+                </div>
+                <span class="badge <%= approvalStatusBadgeClass %> text-uppercase"><%= vendorApprovalStatus %></span>
+            </div>
+            <div class="card-body">
+                <form method="post" class="d-flex flex-column gap-3">
+                    <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                    <div>
+                        <label class="form-label" for="vendor-approval-notes">Notes</label>
+                        <textarea
+                            id="vendor-approval-notes"
+                            class="form-control"
+                            rows="4"
+                            name="approvalNotes"
+                        ><%= vendorBusiness.approvalNotes || '' %></textarea>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button
+                            class="btn btn-outline-secondary"
+                            type="submit"
+                            formaction="<%= pageData.notesAction %>"
+                        >
+                            Save Notes
+                        </button>
+                        <% if (vendorApprovalStatus !== 'approved') { %>
+                            <button
+                                class="btn btn-success"
+                                type="submit"
+                                formaction="<%= pageData.approveAction %>"
+                            >
+                                Approve Vendor
+                            </button>
+                        <% } %>
+                        <% if (vendorApprovalStatus !== 'rejected') { %>
+                            <button
+                                class="btn btn-outline-danger"
+                                type="submit"
+                                formaction="<%= pageData.rejectAction %>"
+                            >
+                                Reject Vendor
+                            </button>
+                        <% } %>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>

@@ -1,0 +1,210 @@
+<%
+    const pageData = marketOpsVendorManagePageData || {}
+    const detail = pageData.vendorDetail || {}
+    const vendorBusiness = detail.vendorBusiness || {}
+    const formValues = pageData.formValues || {}
+    const categoryOptions = Array.isArray(pageData.categoryOptions) ? pageData.categoryOptions : []
+    const ownerProfiles = Array.isArray(pageData.ownerProfiles) ? pageData.ownerProfiles : []
+    const upcomingAppliedMarkets = Array.isArray(pageData.upcomingAppliedMarkets)
+        ? pageData.upcomingAppliedMarkets
+        : []
+    const applicationsHref = pageData.applicationsHref || `/vendors/${vendorBusiness.slug || ''}/manage/applications`
+    const vendorApprovalStatus = vendorBusiness.approvalStatus || 'pending'
+    const approvalStatusBadgeClass =
+        vendorApprovalStatus === 'approved'
+            ? 'text-bg-success'
+            : vendorApprovalStatus === 'rejected'
+              ? 'text-bg-danger'
+              : 'text-bg-secondary'
+%>
+
+<div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3 mb-4">
+    <div>
+        <h1 class="h3 mb-2"><%= vendorBusiness.businessName || 'Vendor Manage' %></h1>
+        <p class="text-body-secondary mb-0">
+            Edit your vendor business profile and keep the approval-ready details current.
+        </p>
+    </div>
+    <% if (vendorBusiness.slug) { %>
+        <a class="btn btn-outline-primary" href="/vendors/<%= vendorBusiness.slug %>">See Public Profile</a>
+    <% } %>
+</div>
+
+<%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash: pageData.flash }) %>
+
+<section class="row g-4">
+    <div class="col-12 col-xxl-8">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Vendor Business Profile</h2>
+            </div>
+            <div class="card-body">
+                <form action="<%= pageData.formAction %>" method="post" class="row g-3">
+                    <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                    <div class="col-12">
+                        <p class="small text-body-secondary mb-0">
+                            <span class="text-danger fw-semibold">*</span> Required fields
+                        </p>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="manage-vendor-business-name">
+                            Business Name <span class="text-danger" aria-hidden="true">*</span>
+                        </label>
+                        <input id="manage-vendor-business-name" class="form-control" type="text" name="businessName" value="<%= formValues.businessName || '' %>" maxlength="255" required />
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="manage-vendor-slug">
+                            Slug <span class="text-danger" aria-hidden="true">*</span>
+                        </label>
+                        <input id="manage-vendor-slug" class="form-control" type="text" name="slug" value="<%= formValues.slug || '' %>" maxlength="128" required />
+                        <div class="form-text">Used in the public profile URL.</div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="manage-vendor-legal-name">Legal Name</label>
+                        <input id="manage-vendor-legal-name" class="form-control" type="text" name="legalName" value="<%= formValues.legalName || '' %>" maxlength="255" />
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="manage-vendor-email">Public Email</label>
+                        <input id="manage-vendor-email" class="form-control" type="email" name="email" value="<%= formValues.email || '' %>" maxlength="255" />
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="manage-vendor-phone">Public Phone Number</label>
+                        <input id="manage-vendor-phone" class="form-control" type="text" name="phone" value="<%= formValues.phone || '' %>" maxlength="64" />
+                        <div class="form-text">This phone number is shown publicly on your vendor profile.</div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="manage-vendor-website">Website URL</label>
+                        <input id="manage-vendor-website" class="form-control" type="text" name="websiteUrl" value="<%= formValues.websiteUrl || '' %>" maxlength="255" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="manage-vendor-summary">Tag Line</label>
+                        <textarea id="manage-vendor-summary" class="form-control" rows="2" name="summary"><%= formValues.summary || '' %></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="manage-vendor-description">Description</label>
+                        <textarea id="manage-vendor-description" class="form-control" rows="5" name="description"><%= formValues.description || '' %></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Product Categories</label>
+                        <% if (categoryOptions.length === 0) { %>
+                            <div class="text-body-secondary small border rounded p-3">
+                                No active vendor product categories are available yet.
+                            </div>
+                        <% } else { %>
+                            <div class="d-flex flex-column gap-2">
+                                <% categoryOptions.forEach((category) => { %>
+                                    <label class="border rounded p-3 d-flex flex-column gap-2">
+                                        <span class="d-flex align-items-center justify-content-between gap-3">
+                                            <span class="d-flex align-items-center gap-2">
+                                                <input
+                                                    class="form-check-input mt-0"
+                                                    type="checkbox"
+                                                    name="productCategoryIds"
+                                                    value="<%= category.vendorProductCategoryId %>"
+                                                    <%= category.isSelected ? 'checked' : '' %>
+                                                />
+                                                <span class="fw-semibold"><%= category.label %></span>
+                                            </span>
+                                            <span class="d-flex align-items-center gap-2 small text-body-secondary">
+                                                <input
+                                                    class="form-check-input mt-0"
+                                                    type="radio"
+                                                    name="primaryCategoryId"
+                                                    value="<%= category.vendorProductCategoryId %>"
+                                                    <%= category.isPrimary ? 'checked' : '' %>
+                                                />
+                                                Primary
+                                            </span>
+                                        </span>
+                                        <% if (category.description) { %>
+                                            <span class="small text-body-secondary"><%= category.description %></span>
+                                        <% } %>
+                                    </label>
+                                <% }) %>
+                            </div>
+                        <% } %>
+                    </div>
+                    <div class="col-12">
+                        <button class="btn btn-primary" type="submit">Save Vendor Business</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xxl-4">
+        <% if (vendorApprovalStatus !== 'approved') { %>
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="h5 mb-0">Approval Status</h2>
+                </div>
+                <div class="card-body">
+                    <p class="mb-2">
+                        <span class="badge <%= approvalStatusBadgeClass %> text-uppercase"><%= vendorApprovalStatus %></span>
+                    </p>
+                    <p class="text-body-secondary mb-0">
+                        <%= vendorBusiness.approvalNotes || 'No approval notes have been recorded yet.' %>
+                    </p>
+                    <% if (vendorApprovalStatus === 'rejected' && vendorBusiness.slug) { %>
+                        <form action="/vendors/<%= vendorBusiness.slug %>/manage/resubmit" method="post" class="mt-3">
+                            <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                            <button class="btn btn-primary" type="submit">Resubmit for Approval</button>
+                        </form>
+                    <% } %>
+                </div>
+            </div>
+        <% } %>
+
+        <div class="card">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Owners</h2>
+            </div>
+            <div class="card-body">
+                <% if (ownerProfiles.length === 0) { %>
+                    <p class="text-body-secondary mb-0">No owners are attached yet.</p>
+                <% } else { %>
+                    <div class="d-flex flex-column gap-3">
+                        <% ownerProfiles.forEach((ownerProfile) => { %>
+                            <div>
+                                <div class="fw-semibold"><%= ownerProfile.displayName %></div>
+                                <div class="small text-body-secondary"><%= ownerProfile.email || `User #${ownerProfile.userId}` %></div>
+                            </div>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header d-flex align-items-center justify-content-between gap-3">
+                <h2 class="h5 mb-0">Upcoming Markets</h2>
+                <span class="small text-body-secondary"><%= upcomingAppliedMarkets.length %></span>
+            </div>
+            <div class="card-body">
+                <% if (upcomingAppliedMarkets.length === 0) { %>
+                    <p class="text-body-secondary mb-3">No upcoming market applications yet.</p>
+                <% } else { %>
+                    <div class="d-flex flex-column gap-3 mb-3">
+                        <% upcomingAppliedMarkets.forEach((marketCard) => { %>
+                            <a class="text-decoration-none text-reset border rounded p-3 d-block" href="<%= marketCard.applicationHref %>">
+                                <div class="d-flex align-items-start justify-content-between gap-3 mb-1">
+                                    <div class="fw-semibold"><%= marketCard.marketName %></div>
+                                    <span class="badge text-bg-light border text-uppercase"><%= marketCard.selectionStatus %></span>
+                                </div>
+                                <div class="small text-body-secondary">
+                                    <%= marketCard.dateLabel %> at <%= marketCard.timeLabel %>
+                                </div>
+                                <div class="small text-body-secondary">
+                                    <%= marketCard.marketGroupName %> · <%= marketCard.applicationStatus %>
+                                </div>
+                            </a>
+                        <% }) %>
+                    </div>
+                <% } %>
+                <a class="btn btn-outline-primary w-100" href="<%= applicationsHref %>">Apply to Markets</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script src="/plugin-assets/ws_plugin_market_ops/scripts/vendor-manage.js"></script>

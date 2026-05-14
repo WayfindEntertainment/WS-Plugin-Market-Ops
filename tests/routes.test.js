@@ -52,9 +52,18 @@ function createRouterRecorder() {
  * @param renderPage
  */
 function createSdk(router, renderPage = jest.fn()) {
+    let isFirstRouter = true
+
     return {
         web: {
-            createRouter: () => router,
+            createRouter: () => {
+                if (isFirstRouter) {
+                    isFirstRouter = false
+                    return router
+                }
+
+                return createRouterRecorder()
+            },
             renderPage,
             guards: {
                 requireAuth: jest.fn((_req, _res, next) => next?.()),
@@ -340,13 +349,21 @@ describe('createMarketOpsPublicRouter', () => {
             }
         })
 
-        expect(router.records.use).toHaveLength(1)
+        expect(router.records.use).toHaveLength(2)
+        expect(router.records.use[1].handlers[0]).toEqual(
+            expect.objectContaining({
+                records: expect.objectContaining({
+                    get: expect.arrayContaining([
+                        expect.objectContaining({ path: '/vendors' }),
+                        expect.objectContaining({ path: '/applications' })
+                    ])
+                })
+            })
+        )
         expect(router.records.get.map((route) => route.path)).toEqual(
             expect.arrayContaining([
                 '/',
                 '/setup',
-                '/vendors',
-                '/applications',
                 '/booth-types/create',
                 '/booth-types/:boothTypeId',
                 '/locations',

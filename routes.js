@@ -1,5 +1,6 @@
 /* eslint-disable jsdoc/require-param-description, jsdoc/require-param-type, jsdoc/require-returns */
 
+import createMarketOpsReviewRouter from './market-ops-review-routes.js'
 import createMarketOpsMarketSetupService from './services/market-setup-service.js'
 
 const MARKET_OPS_PERMISSION_CODES = ['ws_plugin_market_ops.read']
@@ -1034,38 +1035,6 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
                     marketOpsSetupPageData: await buildSetupPageData(marketSetupService),
                     marketOpsSetupActiveSection: resolveSetupSection(req.query),
                     marketOpsFlash: resolveNotice(req.query)
-                }
-            })
-        } catch (err) {
-            next(err)
-        }
-    })
-
-    router.get('/vendors', async (req, res, next) => {
-        try {
-            await renderMarketOpsPage(req, res, renderPage, {
-                page: 'pages/market-ops/vendors',
-                title: 'Market Ops Vendors',
-                locals: {
-                    marketOpsVendorsPageData: {
-                        flash: resolveNotice(req.query)
-                    }
-                }
-            })
-        } catch (err) {
-            next(err)
-        }
-    })
-
-    router.get('/applications', async (req, res, next) => {
-        try {
-            await renderMarketOpsPage(req, res, renderPage, {
-                page: 'pages/market-ops/applications',
-                title: 'Market Ops Applications',
-                locals: {
-                    marketOpsApplicationsPageData: {
-                        flash: resolveNotice(req.query)
-                    }
                 }
             })
         } catch (err) {
@@ -2207,6 +2176,8 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
             next(err)
         }
     })
+
+    router.use(createMarketOpsReviewRouter(sdk))
 
     return router
 }

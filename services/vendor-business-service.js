@@ -155,6 +155,10 @@ const defaultDependencies = {
  *   addVendorBusinessOwner: (vendorBusinessId: number, userId: number) => Promise<Awaited<ReturnType<typeof listVendorBusinessOwnersByVendorBusinessId>>>,
  *   removeVendorBusinessOwner: (vendorBusinessId: number, userId: number) => Promise<Awaited<ReturnType<typeof listVendorBusinessOwnersByVendorBusinessId>>>,
  *   replaceVendorBusinessProductCategories: (vendorBusinessId: number, productCategories: unknown[]) => Promise<ReturnType<typeof buildVendorBusinessDetail>>,
+ *   updateVendorBusinessApprovalNotes: (vendorBusinessId: number, input: {
+ *     approvalNotes?: unknown,
+ *     updatedByUserId?: number|null
+ *   }) => Promise<ReturnType<typeof buildVendorBusinessDetail>>,
  *   approveVendorBusiness: (vendorBusinessId: number, input: {
  *     approvalNotes?: unknown,
  *     approvedAt?: number,
@@ -489,6 +493,44 @@ export function createMarketOpsVendorBusinessService(database, overrides = {}) {
             })
         },
 
+        async updateVendorBusinessApprovalNotes(vendorBusinessId, input) {
+            const normalizedVendorBusinessId = assertPositiveInteger(
+                vendorBusinessId,
+                'vendorBusinessId',
+                'INVALID_VENDOR_BUSINESS_ID'
+            )
+            const normalizedInput = assertPlainObject(
+                input,
+                'input',
+                'INVALID_VENDOR_BUSINESS_APPROVAL_NOTES_INPUT'
+            )
+            const now = Date.now()
+
+            return normalizedDatabase.withTransaction(async (conn) => {
+                const currentRecord = await requireVendorBusiness(conn, normalizedVendorBusinessId)
+
+                await dependencies.updateVendorBusinessById(conn, normalizedVendorBusinessId, {
+                    approvalStatus: currentRecord.approvalStatus,
+                    approvalNotes: normalizeOptionalString(
+                        normalizedInput.approvalNotes,
+                        'approvalNotes',
+                        'INVALID_VENDOR_BUSINESS_APPROVAL_NOTES'
+                    ),
+                    approvedAt: currentRecord.approvedAt,
+                    approvedByUserId: currentRecord.approvedByUserId,
+                    rejectedAt: currentRecord.rejectedAt,
+                    rejectedByUserId: currentRecord.rejectedByUserId,
+                    updatedAt: now,
+                    updatedByUserId:
+                        typeof normalizedInput.updatedByUserId === 'undefined'
+                            ? currentRecord.updatedByUserId
+                            : normalizedInput.updatedByUserId
+                })
+
+                return loadVendorBusinessDetail(conn, normalizedVendorBusinessId)
+            })
+        },
+
         async approveVendorBusiness(vendorBusinessId, input) {
             const normalizedVendorBusinessId = assertPositiveInteger(
                 vendorBusinessId,
@@ -507,11 +549,7 @@ export function createMarketOpsVendorBusinessService(database, overrides = {}) {
 
                 await dependencies.updateVendorBusinessById(conn, normalizedVendorBusinessId, {
                     approvalStatus: 'approved',
-                    approvalNotes: normalizeOptionalString(
-                        normalizedInput.approvalNotes,
-                        'approvalNotes',
-                        'INVALID_VENDOR_BUSINESS_APPROVAL_NOTES'
-                    ),
+                    approvalNotes: null,
                     approvedAt:
                         typeof normalizedInput.approvedAt === 'undefined'
                             ? now
@@ -566,6 +604,47 @@ export function createMarketOpsVendorBusinessService(database, overrides = {}) {
                         typeof normalizedInput.rejectedByUserId === 'undefined'
                             ? null
                             : normalizedInput.rejectedByUserId,
+                    updatedAt: now,
+                    updatedByUserId:
+                        typeof normalizedInput.updatedByUserId === 'undefined'
+                            ? currentRecord.updatedByUserId
+                            : normalizedInput.updatedByUserId
+                })
+
+                return loadVendorBusinessDetail(conn, normalizedVendorBusinessId)
+            })
+        },
+
+        async resubmitVendorBusinessForApproval(vendorBusinessId, input) {
+            const normalizedVendorBusinessId = assertPositiveInteger(
+                vendorBusinessId,
+                'vendorBusinessId',
+                'INVALID_VENDOR_BUSINESS_ID'
+            )
+            const normalizedInput = assertPlainObject(
+                input,
+                'input',
+                'INVALID_VENDOR_BUSINESS_RESUBMIT_INPUT'
+            )
+            const now = Date.now()
+
+            return normalizedDatabase.withTransaction(async (conn) => {
+                const currentRecord = await requireVendorBusiness(conn, normalizedVendorBusinessId)
+
+                if (currentRecord.approvalStatus !== 'rejected') {
+                    throw createServiceError(
+                        'VENDOR_BUSINESS_NOT_REJECTED',
+                        'Only rejected vendor businesses can be resubmitted for approval'
+                    )
+                }
+
+                await dependencies.updateVendorBusinessById(conn, normalizedVendorBusinessId, {
+                    approvalStatus: 'pending',
+                    approvalNotes: currentRecord.approvalNotes,
+                    approvedAt: null,
+                    approvedByUserId: null,
+                    rejectedAt: null,
+                    rejectedByUserId: null,
                     updatedAt: now,
                     updatedByUserId:
                         typeof normalizedInput.updatedByUserId === 'undefined'

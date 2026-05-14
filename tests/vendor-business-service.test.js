@@ -162,7 +162,7 @@ describe('createMarketOpsVendorBusinessService', () => {
         const updatedVendorBusiness = {
             ...currentVendorBusiness,
             approvalStatus: 'approved',
-            approvalNotes: 'approved now',
+            approvalNotes: null,
             approvedAt: 2000,
             approvedByUserId: 11,
             rejectedAt: null,
@@ -201,11 +201,79 @@ describe('createMarketOpsVendorBusinessService', () => {
             41,
             expect.objectContaining({
                 approvalStatus: 'approved',
-                approvalNotes: 'approved now',
+                approvalNotes: null,
                 approvedAt: 2000,
                 approvedByUserId: 11,
                 rejectedAt: null,
                 rejectedByUserId: null,
+                updatedByUserId: 11
+            })
+        )
+    })
+
+    test('updates vendor approval notes without changing approval state', async () => {
+        const database = createDatabase()
+        const currentVendorBusiness = {
+            vendorBusinessId: 41,
+            slug: 'coffee-beans',
+            businessName: 'Coffee Beans',
+            legalName: null,
+            summary: null,
+            description: null,
+            email: null,
+            phone: null,
+            websiteUrl: null,
+            approvalStatus: 'rejected',
+            approvalNotes: 'old note',
+            approvedAt: null,
+            approvedByUserId: null,
+            rejectedAt: 500,
+            rejectedByUserId: 9,
+            createdAt: 1000,
+            createdByUserId: 7,
+            updatedAt: 1001,
+            updatedByUserId: 9
+        }
+        const updatedVendorBusiness = {
+            ...currentVendorBusiness,
+            approvalNotes: 'new note',
+            updatedAt: 2000,
+            updatedByUserId: 11
+        }
+        const dependencies = {
+            insertVendorBusiness: jest.fn(),
+            getVendorBusinessById: jest
+                .fn()
+                .mockResolvedValueOnce(currentVendorBusiness)
+                .mockResolvedValueOnce(updatedVendorBusiness),
+            listVendorBusinesses: jest.fn(),
+            updateVendorBusinessById: jest.fn(async () => updatedVendorBusiness),
+            insertVendorBusinessOwner: jest.fn(),
+            listVendorBusinessOwnersByVendorBusinessId: jest.fn(async () => []),
+            listVendorBusinessOwnershipsByUserId: jest.fn(),
+            deleteVendorBusinessOwner: jest.fn(),
+            getVendorProductCategoryById: jest.fn(),
+            insertVendorBusinessProductCategory: jest.fn(),
+            listVendorBusinessProductCategoriesByVendorBusinessId: jest.fn(async () => []),
+            deleteVendorBusinessProductCategoriesByVendorBusinessId: jest.fn()
+        }
+        const service = createMarketOpsVendorBusinessService(database, dependencies)
+
+        await service.updateVendorBusinessApprovalNotes(41, {
+            approvalNotes: 'new note',
+            updatedByUserId: 11
+        })
+
+        expect(dependencies.updateVendorBusinessById).toHaveBeenCalledWith(
+            expect.any(Object),
+            41,
+            expect.objectContaining({
+                approvalStatus: 'rejected',
+                approvalNotes: 'new note',
+                approvedAt: null,
+                approvedByUserId: null,
+                rejectedAt: 500,
+                rejectedByUserId: 9,
                 updatedByUserId: 11
             })
         )

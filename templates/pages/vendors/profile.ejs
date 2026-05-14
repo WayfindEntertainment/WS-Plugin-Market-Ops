@@ -1,0 +1,109 @@
+<%
+    const pageData = marketOpsVendorProfilePageData || {}
+    const detail = pageData.vendorDetail || {}
+    const vendorBusiness = detail.vendorBusiness || {}
+    const categories = Array.isArray(detail.productCategoryAssignments) ? detail.productCategoryAssignments : []
+    const canManageVendorBusiness = pageData.canManageVendorBusiness === true
+    const websiteUrl =
+        typeof vendorBusiness.websiteUrl === 'string' && vendorBusiness.websiteUrl.trim().length > 0
+            ? vendorBusiness.websiteUrl.trim()
+            : ''
+    const websiteHref = websiteUrl
+        ? /^(https?:)?\/\//i.test(websiteUrl)
+            ? websiteUrl
+            : `https://${websiteUrl}`
+        : ''
+
+    function formatPhoneNumber(phone) {
+        const normalizedPhone = typeof phone === 'string' ? phone.trim() : ''
+        const digits = normalizedPhone.replace(/\D/g, '')
+
+        if (digits.length === 10) {
+            return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+        }
+
+        if (digits.length === 11 && digits.startsWith('1')) {
+            return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`
+        }
+
+        return normalizedPhone
+    }
+%>
+
+<div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3 mb-4">
+    <div>
+        <a class="text-decoration-none small d-inline-block mb-2" href="/vendors">Back to Vendors</a>
+        <h1 class="h3 mb-2"><%= vendorBusiness.businessName || 'Vendor Profile' %></h1>
+        <p class="text-body-secondary mb-0">
+            <%= vendorBusiness.summary || 'Approved Market Ops vendor profile.' %>
+        </p>
+    </div>
+    <% if (canManageVendorBusiness && vendorBusiness.slug) { %>
+        <a class="btn btn-outline-primary" href="/vendors/<%= vendorBusiness.slug %>/manage">Manage Your Business</a>
+    <% } %>
+</div>
+
+<section class="row g-4">
+    <div class="col-12 col-xxl-8">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="h5 mb-1">About This Vendor</h2>
+            </div>
+            <div class="card-body">
+                <% if (vendorBusiness.description) { %>
+                    <p class="mb-0"><%= vendorBusiness.description %></p>
+                <% } else { %>
+                    <p class="text-body-secondary mb-0">This vendor has not published a longer description yet.</p>
+                <% } %>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h2 class="h5 mb-1">Product Categories</h2>
+            </div>
+            <div class="card-body">
+                <% if (categories.length === 0) { %>
+                    <p class="text-body-secondary mb-0">Not listed</p>
+                <% } else { %>
+                    <div class="d-flex flex-wrap gap-2">
+                        <% categories.forEach((assignment) => { if (assignment.category) { %>
+                            <span class="badge text-bg-light border"><%= assignment.category.label %></span>
+                        <% } }) %>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xxl-4">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="h5 mb-1">Contact Info</h2>
+            </div>
+            <div class="card-body">
+                <dl class="row small mb-0">
+                    <% if (vendorBusiness.email) { %>
+                        <dt class="col-sm-4">Email</dt>
+                        <dd class="col-sm-8">
+                            <a href="mailto:<%= vendorBusiness.email %>"><%= vendorBusiness.email %></a>
+                        </dd>
+                    <% } %>
+                    <% if (vendorBusiness.phone) { %>
+                        <dt class="col-sm-4">Phone</dt>
+                        <dd class="col-sm-8"><%= formatPhoneNumber(vendorBusiness.phone) %></dd>
+                    <% } %>
+                    <% if (websiteUrl) { %>
+                        <dt class="col-sm-4">Website</dt>
+                        <dd class="col-sm-8">
+                            <a href="<%= websiteHref %>" target="_blank" rel="noreferrer"><%= websiteUrl %></a>
+                        </dd>
+                    <% } %>
+                    <% if (!vendorBusiness.email && !vendorBusiness.phone && !websiteUrl) { %>
+                        <div class="text-body-secondary">No public contact details have been listed yet.</div>
+                    <% } %>
+                </dl>
+            </div>
+        </div>
+    </div>
+</section>

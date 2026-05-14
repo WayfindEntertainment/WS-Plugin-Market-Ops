@@ -1,33 +1,46 @@
 <%
     const pageData = marketOpsApplicationsPageData || {}
+    const applicationCards = Array.isArray(pageData.applicationCards) ? pageData.applicationCards : []
 %>
 
-<div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+<div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3 mb-4">
     <div>
-        <h1 class="h3 m-0">Applications</h1>
+        <h1 class="h3 mb-2">Applications</h1>
         <p class="text-body-secondary mb-0">
-            This section will hold submitted application review, market-level decisions, and booth assignment work.
+            Review submitted market-group applications and drill into each selected market for booth decisions.
         </p>
     </div>
 </div>
 
 <%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash: pageData.flash }) %>
 
-<section class="row g-3">
-    <div class="col-12 col-xl-8">
-        <div class="card">
-            <div class="card-body">
-                <h2 class="h5 mb-3">Planned Scope</h2>
-                <p class="mb-3">
-                    The route exists now so the sidebar can reflect the actual review workflow before the underlying screens are finished.
-                </p>
-                <ul class="mb-3">
-                    <li>Review submitted applications by market group</li>
-                    <li>Approve, waitlist, reject, or withdraw selected markets</li>
-                    <li>Assign booth offerings, quantities, and booth-fee totals</li>
-                </ul>
-                <a class="btn btn-outline-primary" href="/market-ops">Back to Overview</a>
+<div class="row g-3">
+    <% if (applicationCards.length === 0) { %>
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-body-secondary">
+                    No vendor applications have been created yet.
+                </div>
             </div>
         </div>
-    </div>
-</section>
+    <% } %>
+    <% applicationCards.forEach((applicationCard) => { %>
+        <div class="col-12 col-xxl-8">
+            <a class="card text-decoration-none text-reset h-100" href="/market-ops/applications/<%= applicationCard.vendorApplicationId %>">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between gap-3 mb-2">
+                        <h2 class="h5 mb-0"><%= applicationCard.vendorBusinessName %></h2>
+                        <span class="badge text-bg-light border text-uppercase"><%= applicationCard.status %></span>
+                    </div>
+                    <div class="text-body-secondary mb-2"><%= applicationCard.marketGroupName %></div>
+                    <div class="row g-2 small text-body-secondary">
+                        <div class="col-sm-6">Selections: <%= applicationCard.selectionCount %></div>
+                        <div class="col-sm-6">Application Fee: <%= applicationCard.feeTotalLabel %></div>
+                        <div class="col-sm-6">Requested: <%= applicationCard.requestedCount %></div>
+                        <div class="col-sm-6">Approved: <%= applicationCard.approvedCount %></div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    <% }) %>
+</div>

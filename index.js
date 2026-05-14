@@ -1,4 +1,5 @@
 import { createMarketOpsPublicRouter } from './routes.js'
+import { createMarketOpsNewVendorsRouter, createMarketOpsVendorsRouter } from './vendor-routes.js'
 
 const marketOpsPlugin = {
     navigation: [
@@ -96,6 +97,14 @@ const marketOpsPlugin = {
             {
                 staticMountPath: '/market-ops',
                 createRouter: createMarketOpsPublicRouter
+            },
+            {
+                staticMountPath: '/new-vendors',
+                createRouter: createMarketOpsNewVendorsRouter
+            },
+            {
+                staticMountPath: '/vendors',
+                createRouter: createMarketOpsVendorsRouter
             }
         ]
     },

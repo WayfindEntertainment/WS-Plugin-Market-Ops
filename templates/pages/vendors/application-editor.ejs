@@ -1,0 +1,173 @@
+<%
+    const editor = marketOpsVendorApplicationEditor || {}
+    const vendorDetail = editor.vendorDetail || {}
+    const vendorBusiness = vendorDetail.vendorBusiness || {}
+    const detail = editor.applicationDetail || {}
+    const application = detail.application || {}
+    const marketGroup = detail.marketGroup || {}
+    const applicationMarkets = Array.isArray(editor.applicationMarkets) ? editor.applicationMarkets : []
+    const paymentRecord = editor.paymentRecord || null
+%>
+
+<div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3 mb-4">
+    <div>
+        <a class="text-decoration-none small d-inline-block mb-2" href="/vendors/<%= vendorBusiness.slug %>/manage/applications">Back to Applications</a>
+        <h1 class="h3 mb-2"><%= marketGroup.groupName || 'Vendor Application' %></h1>
+        <p class="text-body-secondary mb-0">
+            Select markets inside this group, set booth quantity requests, and rank booth preferences for each selected market.
+        </p>
+    </div>
+    <span class="badge text-bg-light border text-uppercase"><%= application.status || 'draft' %></span>
+</div>
+
+<%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash: editor.flash }) %>
+
+<section class="row g-4">
+    <div class="col-12 col-xxl-8">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="h5 mb-1">Markets in This Group</h2>
+                <p class="text-body-secondary small mb-0">Each selected market becomes its own review decision inside the final application.</p>
+            </div>
+            <div class="card-body">
+                <form action="<%= editor.formAction %>" method="post" class="d-flex flex-column gap-4">
+                    <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                    <% applicationMarkets.forEach((marketCard) => { %>
+                        <%
+                            const market = marketCard.market || {}
+                            const boothOfferings = Array.isArray(marketCard.boothOfferings) ? marketCard.boothOfferings : []
+                        %>
+                        <section class="border rounded p-3 d-flex flex-column gap-3">
+                            <div class="d-flex align-items-center justify-content-between gap-3">
+                                <label class="form-check mb-0 d-flex align-items-center gap-2">
+                                    <input
+                                        class="form-check-input mt-0"
+                                        type="checkbox"
+                                        name="selectedMarket_<%= market.marketId %>"
+                                        value="1"
+                                        <%= marketCard.isSelected ? 'checked' : '' %>
+                                        <%= editor.isEditable ? '' : 'disabled' %>
+                                    />
+                                    <span class="fw-semibold"><%= market.marketName %></span>
+                                </label>
+                                <span class="small text-body-secondary">
+                                    <%= market.summary || market.locationName || 'Market opportunity' %>
+                                </span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label" for="requested-booth-quantity-<%= market.marketId %>">Requested Booth Quantity</label>
+                                    <input
+                                        id="requested-booth-quantity-<%= market.marketId %>"
+                                        class="form-control"
+                                        type="number"
+                                        min="1"
+                                        name="requestedBoothQuantity_<%= market.marketId %>"
+                                        value="<%= marketCard.requestedBoothQuantity %>"
+                                        <%= editor.isEditable ? '' : 'disabled' %>
+                                    />
+                                </div>
+                                <div class="col-12 col-md-8">
+                                    <label class="form-label d-block">Volunteer Interest</label>
+                                    <div class="form-check">
+                                        <input
+                                            id="willing-to-volunteer-<%= market.marketId %>"
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            name="willingToVolunteer_<%= market.marketId %>"
+                                            value="1"
+                                            <%= marketCard.willingToVolunteer ? 'checked' : '' %>
+                                            <%= editor.isEditable ? '' : 'disabled' %>
+                                        />
+                                        <label class="form-check-label" for="willing-to-volunteer-<%= market.marketId %>">
+                                            We are willing to volunteer if this helps the application.
+                                        </label>
+                                    </div>
+                                </div>
+                                <% [0, 1, 2].forEach((index) => { %>
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label" for="preference-<%= index + 1 %>-<%= market.marketId %>">Preference <%= index + 1 %></label>
+                                        <select
+                                            id="preference-<%= index + 1 %>-<%= market.marketId %>"
+                                            class="form-select"
+                                            name="preference<%= index + 1 %>_<%= market.marketId %>"
+                                            <%= editor.isEditable ? '' : 'disabled' %>
+                                        >
+                                            <option value="">No preference</option>
+                                            <% boothOfferings.forEach((offering) => { %>
+                                                <option
+                                                    value="<%= offering.marketBoothOfferingId %>"
+                                                    <%= marketCard.preferenceChoices[index]?.selectedOfferingId === String(offering.marketBoothOfferingId) ? 'selected' : '' %>
+                                                >
+                                                    Booth <%= offering.boothNumber %> · $<%= (offering.priceCents / 100).toFixed(2) %>
+                                                </option>
+                                            <% }) %>
+                                        </select>
+                                    </div>
+                                <% }) %>
+                            </div>
+                        </section>
+                    <% }) %>
+                    <% if (editor.isEditable) { %>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button class="btn btn-primary" type="submit">Save Draft</button>
+                        </div>
+                    <% } %>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xxl-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="h5 mb-1">Application Summary</h2>
+                <p class="text-body-secondary small mb-0">Status, fee snapshot, and payment handoff state.</p>
+            </div>
+            <div class="card-body">
+                <dl class="row small mb-0">
+                    <dt class="col-sm-5">Status</dt>
+                    <dd class="col-sm-7 text-uppercase"><%= application.status || 'draft' %></dd>
+                    <dt class="col-sm-5">Fee Mode</dt>
+                    <dd class="col-sm-7"><%= application.feeModeSnapshot || 'none' %></dd>
+                    <dt class="col-sm-5">Fee Total</dt>
+                    <dd class="col-sm-7"><%= editor.feeTotalLabel || '$0.00' %></dd>
+                    <% if (paymentRecord) { %>
+                        <dt class="col-sm-5">Payment</dt>
+                        <dd class="col-sm-7">Record #<%= paymentRecord.paymentRecordId %> · <%= paymentRecord.statusCode %></dd>
+                    <% } %>
+                </dl>
+            </div>
+        </div>
+
+        <% if (editor.isEditable) { %>
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="h5 mb-1">Submit Application</h2>
+                    <p class="text-body-secondary small mb-0">Submission freezes the draft and creates the application-fee handoff when a fee is due.</p>
+                </div>
+                <div class="card-body">
+                    <form action="<%= editor.submitAction %>" method="post" class="d-grid">
+                        <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                        <button class="btn btn-success" type="submit">Submit Application</button>
+                    </form>
+                </div>
+            </div>
+        <% } %>
+
+        <% if (application.status === 'submitted') { %>
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="h5 mb-1">Withdraw Application</h2>
+                    <p class="text-body-secondary small mb-0">Submitted applications are read-only, but you can withdraw the whole application if needed.</p>
+                </div>
+                <div class="card-body">
+                    <form action="<%= editor.withdrawAction %>" method="post" class="d-grid">
+                        <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                        <button class="btn btn-outline-danger" type="submit">Withdraw Application</button>
+                    </form>
+                </div>
+            </div>
+        <% } %>
+    </div>
+</section>
