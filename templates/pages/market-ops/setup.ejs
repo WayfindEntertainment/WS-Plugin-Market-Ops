@@ -1,13 +1,16 @@
 <%
     const pageData = marketOpsSetupPageData || {
         locations: [],
-        boothTypes: []
+        boothTypes: [],
+        productCategories: []
     }
     const activeSection =
         typeof marketOpsSetupActiveSection === 'string' && marketOpsSetupActiveSection
             ? marketOpsSetupActiveSection
             : 'locations'
 %>
+
+<link rel="stylesheet" href="/plugin-assets/ws_plugin_market_ops/styles/market-ops.css" />
 
 <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
     <div>
@@ -58,6 +61,17 @@
                 data-admin-plugins-discover-tab="booth_types"
             >
                 Booth Types
+            </button>
+            <button
+                class="admin-plugins-discover-tab <%= activeSection === 'product_categories' ? 'active' : '' %>"
+                id="marketOpsSetupTabProductCategories"
+                type="button"
+                role="tab"
+                aria-selected="<%= activeSection === 'product_categories' ? 'true' : 'false' %>"
+                aria-controls="marketOpsSetupPaneProductCategories"
+                data-admin-plugins-discover-tab="product_categories"
+            >
+                Product Categories
             </button>
         </div>
 
@@ -199,8 +213,139 @@
                     <% } %>
                 </div>
             </section>
+
+            <section
+                class="admin-plugins-discover-pane <%= activeSection === 'product_categories' ? 'admin-plugins-discover-pane-active' : '' %>"
+                id="marketOpsSetupPaneProductCategories"
+                role="tabpanel"
+                aria-labelledby="marketOpsSetupTabProductCategories"
+                data-admin-plugins-discover-pane="product_categories"
+                <%= activeSection === 'product_categories' ? '' : 'hidden' %>
+            >
+                <div class="d-flex flex-column gap-4">
+                    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+                        <div>
+                            <h3 class="h5 mb-1">Product Categories</h3>
+                            <p class="text-body-secondary mb-0">
+                                Maintain the reusable category library vendors can use to describe what they sell.
+                            </p>
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <a class="btn btn-primary" href="/market-ops/product-categories/create">Add Product Category</a>
+                        </div>
+                    </div>
+
+                    <% if (pageData.productCategories.length === 0) { %>
+                        <div class="admin-plugins-discover-empty-card">
+                            <div class="admin-plugins-discover-empty-card-icon">
+                                <i class="bi-tags-fill" aria-hidden="true"></i>
+                            </div>
+                            <div>
+                                <h4 class="h5 mb-1">No product categories yet</h4>
+                                <p class="text-body-secondary mb-3">
+                                    Create the reusable categories vendors can choose from when building their profiles.
+                                </p>
+                                <a class="btn btn-primary" href="/market-ops/product-categories/create">Create First Product Category</a>
+                            </div>
+                        </div>
+                    <% } else { %>
+                        <form
+                            action="/market-ops/product-categories/reorder"
+                            method="post"
+                            class="market-ops-product-category-reorder-form"
+                            data-market-ops-product-category-form
+                        >
+                            <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                            <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+                                <p class="text-body-secondary mb-0">
+                                    Drag categories into place or use the arrow buttons, then save the new order.
+                                </p>
+                                <button
+                                    class="btn btn-outline-primary"
+                                    type="submit"
+                                    data-market-ops-product-category-save
+                                    disabled
+                                >
+                                    Save Order
+                                </button>
+                            </div>
+                            <div
+                                class="d-flex flex-column gap-3"
+                                data-market-ops-product-category-list
+                            >
+                                <% for (const productCategory of pageData.productCategories) { %>
+                                    <article
+                                        class="admin-plugins-discover-plugin-card market-ops-sortable-card"
+                                        draggable="true"
+                                        data-market-ops-product-category-item
+                                        data-vendor-product-category-id="<%= productCategory.vendorProductCategoryId %>"
+                                    >
+                                        <div class="d-flex align-items-center justify-content-between gap-3 flex-nowrap">
+                                            <div class="d-flex align-items-center gap-3 flex-grow-1 min-w-0">
+                                                <button
+                                                    class="btn btn-outline-secondary market-ops-sortable-handle"
+                                                    type="button"
+                                                    aria-label="Drag to reorder <%= productCategory.label %>"
+                                                    title="Drag to reorder"
+                                                    data-market-ops-product-category-handle
+                                                >
+                                                    <i class="bi-grip-vertical" aria-hidden="true"></i>
+                                                </button>
+                                                <div class="flex-grow-1 min-w-0 market-ops-sortable-copy">
+                                                    <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                                        <h4 class="h5 mb-0 admin-plugins-discover-plugin-card-title">
+                                                            <a
+                                                                class="text-decoration-none text-reset"
+                                                                href="/market-ops/product-categories/<%= productCategory.vendorProductCategoryId %>"
+                                                            >
+                                                                <%= productCategory.label %>
+                                                            </a>
+                                                        </h4>
+                                                        <% if (productCategory.isActive !== 1) { %>
+                                                            <span class="badge text-bg-secondary">Inactive</span>
+                                                        <% } %>
+                                                    </div>
+                                                    <p class="text-body-secondary mb-0 market-ops-sortable-description">
+                                                        <%= productCategory.description || 'Reusable product category for vendor profiles and later market workflows.' %>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex align-items-center gap-2 flex-shrink-0 flex-nowrap market-ops-sortable-actions">
+                                                <button
+                                                    class="btn btn-outline-secondary btn-sm d-none d-md-inline-flex"
+                                                    type="button"
+                                                    aria-label="Move <%= productCategory.label %> up"
+                                                    data-market-ops-product-category-move="up"
+                                                >
+                                                    <i class="bi-arrow-up" aria-hidden="true"></i>
+                                                </button>
+                                                <button
+                                                    class="btn btn-outline-secondary btn-sm d-none d-md-inline-flex"
+                                                    type="button"
+                                                    aria-label="Move <%= productCategory.label %> down"
+                                                    data-market-ops-product-category-move="down"
+                                                >
+                                                    <i class="bi-arrow-down" aria-hidden="true"></i>
+                                                </button>
+                                                <a
+                                                    class="btn btn-outline-primary btn-sm"
+                                                    href="/market-ops/product-categories/<%= productCategory.vendorProductCategoryId %>"
+                                                >
+                                                    Edit
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </article>
+                                <% } %>
+                            </div>
+                            <div data-market-ops-product-category-order-inputs></div>
+                        </form>
+                    <% } %>
+                </div>
+            </section>
         </div>
     </div>
 </section>
 
 <script defer src="/scripts/admin-plugins-discover.js"></script>
+<script defer src="/plugin-assets/ws_plugin_market_ops/scripts/product-category-ordering.js"></script>

@@ -1,4 +1,8 @@
 import {
+    getVendorProductCategoryById,
+    insertVendorProductCategory,
+    listVendorProductCategories,
+    updateVendorProductCategoryById,
     getBoothTypeById,
     insertBoothType,
     listBoothTypes,
@@ -79,6 +83,10 @@ const defaultDependencies = {
     listMarketsByMarketGroupId,
     updateMarketById,
     insertBoothType,
+    insertVendorProductCategory,
+    getVendorProductCategoryById,
+    listVendorProductCategories,
+    updateVendorProductCategoryById,
     getBoothTypeById,
     listBoothTypes,
     updateBoothTypeById,
@@ -111,6 +119,11 @@ const defaultDependencies = {
  *   getMarketDetailById: (marketId: number) => Promise<ReturnType<typeof buildMarketDetail>>,
  *   listMarketsByMarketGroupId: (marketGroupId: number) => Promise<Awaited<ReturnType<typeof listMarketsByMarketGroupId>>>,
  *   updateMarketById: (marketId: number, input: unknown) => Promise<ReturnType<typeof buildMarketDetail>>,
+ *   createVendorProductCategory: (input: unknown) => Promise<Awaited<ReturnType<typeof getVendorProductCategoryById>>>,
+ *   getVendorProductCategoryById: (vendorProductCategoryId: number) => Promise<Awaited<ReturnType<typeof getVendorProductCategoryById>>>,
+ *   listVendorProductCategories: () => Promise<Awaited<ReturnType<typeof listVendorProductCategories>>>,
+ *   updateVendorProductCategoryById: (vendorProductCategoryId: number, input: unknown) => Promise<Awaited<ReturnType<typeof getVendorProductCategoryById>>>,
+ *   reorderVendorProductCategories: (orderedVendorProductCategoryIds: number[], actorUserId?: number|null) => Promise<Awaited<ReturnType<typeof listVendorProductCategories>>>,
  *   createBoothType: (input: unknown) => Promise<Awaited<ReturnType<typeof getBoothTypeById>>>,
  *   getBoothTypeById: (boothTypeId: number) => Promise<Awaited<ReturnType<typeof getBoothTypeById>>>,
  *   listBoothTypes: () => Promise<Awaited<ReturnType<typeof listBoothTypes>>>,
@@ -200,6 +213,29 @@ export function createMarketOpsMarketSetupService(database, overrides = {}) {
         }
 
         return boothType
+    }
+
+    /**
+     * Read one vendor product category or fail with one deterministic service error.
+     *
+     * @param {{ query: (sql: string, params?: unknown[]) => Promise<unknown> }} queryable - Query seam.
+     * @param {number} vendorProductCategoryId - Vendor product category id.
+     * @returns {Promise<NonNullable<Awaited<ReturnType<typeof getVendorProductCategoryById>>>>} Matching vendor product category.
+     */
+    async function requireVendorProductCategory(queryable, vendorProductCategoryId) {
+        const vendorProductCategory = await dependencies.getVendorProductCategoryById(
+            queryable,
+            vendorProductCategoryId
+        )
+
+        if (!vendorProductCategory) {
+            throw createServiceError(
+                'VENDOR_PRODUCT_CATEGORY_NOT_FOUND',
+                `Vendor product category was not found: ${vendorProductCategoryId}`
+            )
+        }
+
+        return vendorProductCategory
     }
 
     /**
@@ -399,6 +435,109 @@ export function createMarketOpsMarketSetupService(database, overrides = {}) {
                 await requireLocation(conn, updatedMarket.locationId)
 
                 return loadMarketDetail(conn, normalizedMarketId)
+            })
+        },
+
+        async createVendorProductCategory(input) {
+            return dependencies.insertVendorProductCategory(normalizedDatabase, input)
+        },
+
+        async getVendorProductCategoryById(vendorProductCategoryId) {
+            const normalizedVendorProductCategoryId = assertPositiveInteger(
+                vendorProductCategoryId,
+                'vendorProductCategoryId',
+                'INVALID_VENDOR_PRODUCT_CATEGORY_ID'
+            )
+
+            return dependencies.getVendorProductCategoryById(
+                normalizedDatabase,
+                normalizedVendorProductCategoryId
+            )
+        },
+
+        async listVendorProductCategories() {
+            return dependencies.listVendorProductCategories(normalizedDatabase)
+        },
+
+        async updateVendorProductCategoryById(vendorProductCategoryId, input) {
+            const normalizedVendorProductCategoryId = assertPositiveInteger(
+                vendorProductCategoryId,
+                'vendorProductCategoryId',
+                'INVALID_VENDOR_PRODUCT_CATEGORY_ID'
+            )
+
+            return dependencies.updateVendorProductCategoryById(
+                normalizedDatabase,
+                normalizedVendorProductCategoryId,
+                input
+            )
+        },
+
+        async reorderVendorProductCategories(orderedVendorProductCategoryIds, actorUserId = null) {
+            if (!Array.isArray(orderedVendorProductCategoryIds)) {
+                throw createServiceError(
+                    'INVALID_VENDOR_PRODUCT_CATEGORY_ORDER',
+                    'Vendor product category order must be an array of ids'
+                )
+            }
+
+            const normalizedOrderedIds = orderedVendorProductCategoryIds.map((value, index) =>
+                assertPositiveInteger(
+                    value,
+                    `orderedVendorProductCategoryIds[${index}]`,
+                    'INVALID_VENDOR_PRODUCT_CATEGORY_ORDER'
+                )
+            )
+
+            if (new Set(normalizedOrderedIds).size !== normalizedOrderedIds.length) {
+                throw createServiceError(
+                    'DUPLICATE_VENDOR_PRODUCT_CATEGORY_ORDER_ID',
+                    'Vendor product category order contains duplicate ids'
+                )
+            }
+
+            return normalizedDatabase.withTransaction(async (conn) => {
+                const existingCategories = await dependencies.listVendorProductCategories(conn)
+                const existingIds = existingCategories.map(
+                    (category) => category.vendorProductCategoryId
+                )
+
+                if (existingIds.length !== normalizedOrderedIds.length) {
+                    throw createServiceError(
+                        'VENDOR_PRODUCT_CATEGORY_ORDER_MISMATCH',
+                        'Vendor product category order must include every existing category exactly once'
+                    )
+                }
+
+                const existingIdSet = new Set(existingIds)
+
+                for (const vendorProductCategoryId of normalizedOrderedIds) {
+                    if (!existingIdSet.has(vendorProductCategoryId)) {
+                        throw createServiceError(
+                            'VENDOR_PRODUCT_CATEGORY_ORDER_MISMATCH',
+                            'Vendor product category order must include every existing category exactly once'
+                        )
+                    }
+                }
+
+                for (const [sortOrder, vendorProductCategoryId] of normalizedOrderedIds.entries()) {
+                    const currentCategory = await requireVendorProductCategory(
+                        conn,
+                        vendorProductCategoryId
+                    )
+
+                    await dependencies.updateVendorProductCategoryById(
+                        conn,
+                        vendorProductCategoryId,
+                        {
+                            ...currentCategory,
+                            sortOrder,
+                            updatedByUserId: actorUserId
+                        }
+                    )
+                }
+
+                return dependencies.listVendorProductCategories(conn)
             })
         },
 

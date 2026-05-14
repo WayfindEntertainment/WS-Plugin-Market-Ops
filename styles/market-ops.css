@@ -23,3 +23,74 @@
 .market-ops-market-schedule-link:focus-visible .market-ops-market-schedule-meta {
     color: var(--bs-body-color);
 }
+
+.market-ops-sortable-card {
+    padding-top: 0.875rem;
+    padding-bottom: 0.875rem;
+    transition:
+        background-color 0.24s ease,
+        border-color 0.24s ease,
+        box-shadow 0.24s ease,
+        transform 0.24s ease;
+}
+
+.market-ops-sortable-card:hover,
+.market-ops-sortable-card:focus-within {
+    background-color: rgba(var(--bs-primary-rgb), 0.04);
+    border-color: rgba(var(--bs-primary-rgb), 0.2);
+    box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.06);
+}
+
+.market-ops-sortable-card-dragging {
+    opacity: 0.7;
+    box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.14);
+}
+
+.market-ops-sortable-card-reordering {
+    z-index: 1;
+}
+
+.market-ops-sortable-handle {
+    cursor: grab;
+    align-self: center;
+}
+
+.market-ops-sortable-handle:active {
+    cursor: grabbing;
+}
+
+.market-ops-sortable-copy {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+}
+
+.market-ops-sortable-copy p {
+    line-height: 1.35;
+}
+
+.market-ops-sortable-description {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.market-ops-sortable-actions {
+    white-space: nowrap;
+}
+
+@media (max-width: 575.98px) {
+    .market-ops-sortable-card {
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
+    }
+
+    .market-ops-sortable-card .admin-plugins-discover-plugin-card-title {
+        font-size: 1.1rem;
+    }
+}
+
+.market-ops-sortable-dirty [data-market-ops-product-category-save] {
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.12);
+}

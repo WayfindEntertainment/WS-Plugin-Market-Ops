@@ -14,6 +14,12 @@ export const MARKET_GROUP_FEE_MODE_OPTIONS = [
 const NOTICE_MESSAGES = {
     'booth-type-created': { type: 'success', message: 'Booth type created.' },
     'booth-type-updated': { type: 'success', message: 'Booth type updated.' },
+    'product-category-created': { type: 'success', message: 'Product category created.' },
+    'product-category-updated': { type: 'success', message: 'Product category updated.' },
+    'product-category-order-updated': {
+        type: 'success',
+        message: 'Product category order updated.'
+    },
     'booth-offering-created': { type: 'success', message: 'Booth offering created.' },
     'booth-offering-updated': { type: 'success', message: 'Booth offering updated.' },
     'location-created': { type: 'success', message: 'Location created.' },
@@ -24,7 +30,7 @@ const NOTICE_MESSAGES = {
     'market-updated': { type: 'success', message: 'Market updated.' }
 }
 
-const MARKET_OPS_SETUP_SECTIONS = new Set(['locations', 'booth_types'])
+const MARKET_OPS_SETUP_SECTIONS = new Set(['locations', 'booth_types', 'product_categories'])
 
 /**
  *
@@ -395,6 +401,21 @@ export function buildBoothTypeFormValues(source = {}, { isActiveFallback = '1' }
  *
  * @param source
  * @param root0
+ * @param root0.isActiveFallback
+ */
+export function buildVendorProductCategoryFormValues(source = {}, { isActiveFallback = '1' } = {}) {
+    return {
+        slug: normalizeTrimmedString(source.slug),
+        label: normalizeTrimmedString(source.label),
+        description: normalizeTrimmedString(source.description),
+        isActive: normalizeCheckboxValue(source.isActive, isActiveFallback)
+    }
+}
+
+/**
+ *
+ * @param source
+ * @param root0
  * @param root0.applicationsOpenFallback
  * @param root0.isPublicFallback
  */
@@ -570,6 +591,45 @@ export function buildBoothTypeInputFromFormValues(formValues, actorUserId, exist
 
 /**
  *
+ * @param formValues
+ * @param actorUserId
+ * @param existingRecord
+ * @param root0
+ * @param root0.sortOrder
+ */
+export function buildVendorProductCategoryInputFromFormValues(
+    formValues,
+    actorUserId,
+    existingRecord = null,
+    { sortOrder = existingRecord?.sortOrder ?? 0 } = {}
+) {
+    return {
+        slug: normalizeRequiredBoundedStringField(
+            formValues.slug,
+            'Slug',
+            128,
+            'INVALID_VENDOR_PRODUCT_CATEGORY_SLUG'
+        ),
+        label: normalizeRequiredBoundedStringField(
+            formValues.label,
+            'Label',
+            255,
+            'INVALID_VENDOR_PRODUCT_CATEGORY_LABEL'
+        ),
+        description: normalizeOptionalStringField(formValues.description),
+        isActive: isCheckedValue(formValues.isActive) ? 1 : 0,
+        sortOrder: normalizeNonNegativeIntegerField(
+            sortOrder,
+            'Sort order',
+            'INVALID_VENDOR_PRODUCT_CATEGORY_SORT_ORDER'
+        ),
+        createdByUserId: existingRecord?.createdByUserId ?? actorUserId,
+        updatedByUserId: actorUserId
+    }
+}
+
+/**
+ *
  * @param marketGroupId
  * @param formValues
  * @param actorUserId
@@ -665,6 +725,36 @@ export function buildMarketBoothOfferingInputFromFormValues(
         createdByUserId: existingRecord?.createdByUserId ?? actorUserId,
         updatedByUserId: actorUserId
     }
+}
+
+/**
+ *
+ * @param value
+ */
+function normalizeArrayInput(value) {
+    if (Array.isArray(value)) {
+        return value
+    }
+
+    if (typeof value === 'undefined' || value == null) {
+        return []
+    }
+
+    return [value]
+}
+
+/**
+ *
+ * @param value
+ */
+export function buildVendorProductCategoryOrderInput(value) {
+    return normalizeArrayInput(value).map((entry) =>
+        normalizePositiveIntegerField(
+            entry,
+            'Product category order',
+            'INVALID_VENDOR_PRODUCT_CATEGORY_ORDER'
+        )
+    )
 }
 
 /**
@@ -830,14 +920,16 @@ async function buildDashboardPageData(marketSetupService) {
  * @param marketSetupService
  */
 async function buildSetupPageData(marketSetupService) {
-    const [locations, boothTypes] = await Promise.all([
+    const [locations, boothTypes, productCategories] = await Promise.all([
         marketSetupService.listLocations(),
-        marketSetupService.listBoothTypes()
+        marketSetupService.listBoothTypes(),
+        marketSetupService.listVendorProductCategories()
     ])
 
     return {
         locations,
-        boothTypes
+        boothTypes,
+        productCategories
     }
 }
 
@@ -1039,6 +1131,272 @@ export function createMarketOpsPublicRouter(sdk, overrides = {}) {
             })
         } catch (err) {
             next(err)
+        }
+    })
+
+    router.get('/product-categories/create', async (req, res, next) => {
+        try {
+            await renderMarketOpsPage(req, res, renderPage, {
+                page: 'pages/market-ops/product-category-editor',
+                title: 'Create Product Category',
+                locals: {
+                    marketOpsVendorProductCategoryEditor: {
+                        mode: 'create',
+                        vendorProductCategory: null,
+                        formAction: '/market-ops/product-categories/create',
+                        formValues: buildVendorProductCategoryFormValues(),
+                        flash: resolveNotice(req.query),
+                        helpers: {
+                            isCheckedValue
+                        }
+                    }
+                }
+            })
+        } catch (err) {
+            next(err)
+        }
+    })
+
+    router.post('/product-categories/create', async (req, res, next) => {
+        const formValues = buildVendorProductCategoryFormValues(req.body, {
+            isActiveFallback: '0'
+        })
+
+        try {
+            const currentCategories = await marketSetupService.listVendorProductCategories()
+            const nextSortOrder =
+                currentCategories.reduce(
+                    (highestSortOrder, category) =>
+                        Math.max(highestSortOrder, Number(category.sortOrder) || 0),
+                    -1
+                ) + 1
+            await marketSetupService.createVendorProductCategory(
+                buildVendorProductCategoryInputFromFormValues(
+                    formValues,
+                    req?.user?.user_id ?? null,
+                    null,
+                    { sortOrder: nextSortOrder }
+                )
+            )
+
+            res.redirect(
+                303,
+                '/market-ops/setup?notice=product-category-created&section=product_categories'
+            )
+        } catch (err) {
+            if (!isRecoverableMarketOpsError(err)) {
+                next(err)
+                return
+            }
+
+            try {
+                await renderMarketOpsPage(req, res, renderPage, {
+                    page: 'pages/market-ops/product-category-editor',
+                    title: 'Create Product Category',
+                    statusCode: err.statusCode ?? 400,
+                    locals: {
+                        marketOpsVendorProductCategoryEditor: {
+                            mode: 'create',
+                            vendorProductCategory: null,
+                            formAction: '/market-ops/product-categories/create',
+                            formValues,
+                            flash: {
+                                type: 'danger',
+                                message: getMarketOpsErrorMessage(
+                                    err,
+                                    'We could not create that product category.'
+                                )
+                            },
+                            helpers: {
+                                isCheckedValue
+                            }
+                        }
+                    }
+                })
+            } catch (renderErr) {
+                next(renderErr)
+            }
+        }
+    })
+
+    router.post('/product-categories/reorder', async (req, res, next) => {
+        try {
+            const orderedVendorProductCategoryIds = buildVendorProductCategoryOrderInput(
+                req?.body?.orderedVendorProductCategoryIds
+            )
+
+            await marketSetupService.reorderVendorProductCategories(
+                orderedVendorProductCategoryIds,
+                req?.user?.user_id ?? null
+            )
+
+            res.redirect(
+                303,
+                '/market-ops/setup?notice=product-category-order-updated&section=product_categories'
+            )
+        } catch (err) {
+            if (!isRecoverableMarketOpsError(err)) {
+                next(err)
+                return
+            }
+
+            try {
+                await renderMarketOpsPage(req, res, renderPage, {
+                    page: 'pages/market-ops/setup',
+                    title: 'Market Ops Setup',
+                    statusCode: err.statusCode ?? 400,
+                    locals: {
+                        marketOpsSetupPageData: await buildSetupPageData(marketSetupService),
+                        marketOpsSetupActiveSection: 'product_categories',
+                        marketOpsFlash: {
+                            type: 'danger',
+                            message: getMarketOpsErrorMessage(
+                                err,
+                                'We could not update the product category order.'
+                            )
+                        }
+                    }
+                })
+            } catch (renderErr) {
+                next(renderErr)
+            }
+        }
+    })
+
+    router.get('/product-categories/:vendorProductCategoryId', async (req, res, next) => {
+        const vendorProductCategoryId = resolveRouteId(req?.params?.vendorProductCategoryId)
+
+        if (!vendorProductCategoryId) {
+            await renderMarketOpsNotFound(
+                req,
+                res,
+                renderPage,
+                'Product Category Not Found',
+                'That product category could not be found.'
+            )
+            return
+        }
+
+        try {
+            const vendorProductCategory =
+                await marketSetupService.getVendorProductCategoryById(vendorProductCategoryId)
+
+            if (!vendorProductCategory) {
+                await renderMarketOpsNotFound(
+                    req,
+                    res,
+                    renderPage,
+                    'Product Category Not Found',
+                    'That product category could not be found.'
+                )
+                return
+            }
+
+            await renderMarketOpsPage(req, res, renderPage, {
+                page: 'pages/market-ops/product-category-editor',
+                title: vendorProductCategory.label,
+                locals: {
+                    marketOpsVendorProductCategoryEditor: {
+                        mode: 'edit',
+                        vendorProductCategory,
+                        formAction: `/market-ops/product-categories/${vendorProductCategoryId}`,
+                        formValues: buildVendorProductCategoryFormValues(vendorProductCategory),
+                        flash: resolveNotice(req.query),
+                        helpers: {
+                            isCheckedValue
+                        }
+                    }
+                }
+            })
+        } catch (err) {
+            next(err)
+        }
+    })
+
+    router.post('/product-categories/:vendorProductCategoryId', async (req, res, next) => {
+        const vendorProductCategoryId = resolveRouteId(req?.params?.vendorProductCategoryId)
+
+        if (!vendorProductCategoryId) {
+            await renderMarketOpsNotFound(
+                req,
+                res,
+                renderPage,
+                'Product Category Not Found',
+                'That product category could not be found.'
+            )
+            return
+        }
+
+        try {
+            const vendorProductCategory =
+                await marketSetupService.getVendorProductCategoryById(vendorProductCategoryId)
+
+            if (!vendorProductCategory) {
+                await renderMarketOpsNotFound(
+                    req,
+                    res,
+                    renderPage,
+                    'Product Category Not Found',
+                    'That product category could not be found.'
+                )
+                return
+            }
+
+            const formValues = buildVendorProductCategoryFormValues(req.body, {
+                isActiveFallback: '0'
+            })
+
+            await marketSetupService.updateVendorProductCategoryById(
+                vendorProductCategoryId,
+                buildVendorProductCategoryInputFromFormValues(
+                    formValues,
+                    req?.user?.user_id ?? null,
+                    vendorProductCategory
+                )
+            )
+
+            res.redirect(
+                303,
+                '/market-ops/setup?notice=product-category-updated&section=product_categories'
+            )
+        } catch (err) {
+            if (!isRecoverableMarketOpsError(err)) {
+                next(err)
+                return
+            }
+
+            try {
+                const vendorProductCategory =
+                    await marketSetupService.getVendorProductCategoryById(vendorProductCategoryId)
+
+                await renderMarketOpsPage(req, res, renderPage, {
+                    page: 'pages/market-ops/product-category-editor',
+                    title: vendorProductCategory?.label || 'Edit Product Category',
+                    statusCode: err.statusCode ?? 400,
+                    locals: {
+                        marketOpsVendorProductCategoryEditor: {
+                            mode: 'edit',
+                            vendorProductCategory,
+                            formAction: `/market-ops/product-categories/${vendorProductCategoryId}`,
+                            formValues: buildVendorProductCategoryFormValues(req.body, {
+                                isActiveFallback: '0'
+                            }),
+                            flash: {
+                                type: 'danger',
+                                message: getMarketOpsErrorMessage(
+                                    err,
+                                    'We could not update that product category.'
+                                )
+                            },
+                            helpers: {
+                                isCheckedValue
+                            }
+                        }
+                    }
+                })
+            } catch (renderErr) {
+                next(renderErr)
+            }
         }
     })
 

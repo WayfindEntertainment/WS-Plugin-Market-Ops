@@ -185,4 +185,95 @@ describe('createMarketOpsMarketSetupService', () => {
             boothOfferings: []
         })
     })
+
+    test('reorders vendor product categories by rewriting sequential sort order', async () => {
+        const database = createDatabase()
+        const categories = [
+            {
+                vendorProductCategoryId: 4,
+                slug: 'baked-goods',
+                label: 'Baked Goods',
+                description: null,
+                isActive: 1,
+                sortOrder: 0,
+                createdAt: 1000,
+                createdByUserId: 1,
+                updatedAt: 1000,
+                updatedByUserId: 1
+            },
+            {
+                vendorProductCategoryId: 9,
+                slug: 'jewelry',
+                label: 'Jewelry',
+                description: null,
+                isActive: 1,
+                sortOrder: 1,
+                createdAt: 1000,
+                createdByUserId: 1,
+                updatedAt: 1000,
+                updatedByUserId: 1
+            }
+        ]
+        const dependencies = {
+            insertVendorProductCategory: jest.fn(),
+            getVendorProductCategoryById: jest.fn(
+                async (_queryable, vendorProductCategoryId) =>
+                    categories.find(
+                        (category) => category.vendorProductCategoryId === vendorProductCategoryId
+                    ) ?? null
+            ),
+            listVendorProductCategories: jest.fn(async () => categories),
+            updateVendorProductCategoryById: jest.fn(
+                async (_queryable, vendorProductCategoryId, input) => ({
+                    ...categories.find(
+                        (category) => category.vendorProductCategoryId === vendorProductCategoryId
+                    ),
+                    ...input,
+                    vendorProductCategoryId
+                })
+            ),
+            insertLocation: jest.fn(),
+            getLocationById: jest.fn(),
+            listLocations: jest.fn(),
+            updateLocationById: jest.fn(),
+            insertMarketGroup: jest.fn(),
+            getMarketGroupById: jest.fn(),
+            listMarketGroups: jest.fn(),
+            updateMarketGroupById: jest.fn(),
+            insertMarket: jest.fn(),
+            getMarketById: jest.fn(),
+            listMarketsByMarketGroupId: jest.fn(),
+            updateMarketById: jest.fn(),
+            insertBoothType: jest.fn(),
+            getBoothTypeById: jest.fn(),
+            listBoothTypes: jest.fn(),
+            updateBoothTypeById: jest.fn(),
+            insertMarketBoothOffering: jest.fn(),
+            getMarketBoothOfferingById: jest.fn(),
+            listMarketBoothOfferingsByMarketId: jest.fn(),
+            updateMarketBoothOfferingById: jest.fn()
+        }
+        const service = createMarketOpsMarketSetupService(database, dependencies)
+
+        await service.reorderVendorProductCategories([9, 4], 7)
+
+        expect(dependencies.updateVendorProductCategoryById).toHaveBeenNthCalledWith(
+            1,
+            expect.any(Object),
+            9,
+            expect.objectContaining({
+                sortOrder: 0,
+                updatedByUserId: 7
+            })
+        )
+        expect(dependencies.updateVendorProductCategoryById).toHaveBeenNthCalledWith(
+            2,
+            expect.any(Object),
+            4,
+            expect.objectContaining({
+                sortOrder: 1,
+                updatedByUserId: 7
+            })
+        )
+    })
 })

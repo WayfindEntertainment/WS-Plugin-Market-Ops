@@ -13,6 +13,9 @@ import {
     buildMarketGroupFormValues,
     buildMarketInputFromFormValues,
     buildMarketFormValues,
+    buildVendorProductCategoryFormValues,
+    buildVendorProductCategoryInputFromFormValues,
+    buildVendorProductCategoryOrderInput,
     createMarketOpsPublicRouter,
     formatDatetimeLocalValue,
     resolveNotice
@@ -319,6 +322,44 @@ describe('Market Ops route helpers', () => {
         ).toThrow('Label must be 255 characters or fewer')
     })
 
+    test('buildVendorProductCategoryFormValues treats a missing checkbox as inactive during post parsing', () => {
+        const formValues = buildVendorProductCategoryFormValues(
+            {
+                slug: 'baked-goods',
+                label: 'Baked Goods'
+            },
+            { isActiveFallback: '0' }
+        )
+
+        expect(formValues.isActive).toBe('0')
+    })
+
+    test('buildVendorProductCategoryInputFromFormValues rejects overlong schema-backed strings', () => {
+        expect(() =>
+            buildVendorProductCategoryInputFromFormValues(
+                buildVendorProductCategoryFormValues({
+                    slug: 'x'.repeat(129),
+                    label: 'Baked Goods'
+                }),
+                4
+            )
+        ).toThrow('Slug must be 128 characters or fewer')
+
+        expect(() =>
+            buildVendorProductCategoryInputFromFormValues(
+                buildVendorProductCategoryFormValues({
+                    slug: 'baked-goods',
+                    label: 'x'.repeat(256)
+                }),
+                4
+            )
+        ).toThrow('Label must be 255 characters or fewer')
+    })
+
+    test('buildVendorProductCategoryOrderInput normalizes repeated ordered ids', () => {
+        expect(buildVendorProductCategoryOrderInput(['4', '9', '12'])).toEqual([4, 9, 12])
+    })
+
     test('resolveNotice returns mapped success flashes', () => {
         expect(resolveNotice({ notice: 'market-created' })).toEqual({
             type: 'success',
@@ -364,6 +405,8 @@ describe('createMarketOpsPublicRouter', () => {
             expect.arrayContaining([
                 '/',
                 '/setup',
+                '/product-categories/create',
+                '/product-categories/:vendorProductCategoryId',
                 '/booth-types/create',
                 '/booth-types/:boothTypeId',
                 '/locations',
@@ -375,6 +418,9 @@ describe('createMarketOpsPublicRouter', () => {
         )
         expect(router.records.post.map((route) => route.path)).toEqual(
             expect.arrayContaining([
+                '/product-categories/create',
+                '/product-categories/:vendorProductCategoryId',
+                '/product-categories/reorder',
                 '/booth-types/create',
                 '/booth-types/:boothTypeId',
                 '/locations/create',
@@ -562,14 +608,17 @@ describe('createMarketOpsPublicRouter', () => {
         const sdk = createSdk(router, renderPage)
         const marketSetupService = {
             listLocations: jest.fn(async () => [{ locationId: 2, locationName: 'Crossroads' }]),
-            listBoothTypes: jest.fn(async () => [{ boothTypeId: 3, label: "8'x8'" }])
+            listBoothTypes: jest.fn(async () => [{ boothTypeId: 3, label: "8'x8'" }]),
+            listVendorProductCategories: jest.fn(async () => [
+                { vendorProductCategoryId: 4, label: 'Baked Goods' }
+            ])
         }
 
         createMarketOpsPublicRouter(sdk, { marketSetupService })
 
         const setupRoute = router.records.get.find((route) => route.path === '/setup')
         const req = {
-            query: { section: 'booth_types' },
+            query: { section: 'product_categories' },
             user: { user_id: 1 }
         }
         const res = {
@@ -586,13 +635,189 @@ describe('createMarketOpsPublicRouter', () => {
                 page: 'pages/market-ops/setup',
                 surface: 'public',
                 locals: expect.objectContaining({
-                    marketOpsSetupActiveSection: 'booth_types',
+                    marketOpsSetupActiveSection: 'product_categories',
                     marketOpsSetupPageData: {
                         locations: [{ locationId: 2, locationName: 'Crossroads' }],
-                        boothTypes: [{ boothTypeId: 3, label: "8'x8'" }]
+                        boothTypes: [{ boothTypeId: 3, label: "8'x8'" }],
+                        productCategories: [{ vendorProductCategoryId: 4, label: 'Baked Goods' }]
                     }
                 })
             })
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('creates a product category and redirects to its detail page', async () => {
+        const router = createRouterRecorder()
+        const sdk = createSdk(router, jest.fn())
+        const marketSetupService = {
+            listVendorProductCategories: jest.fn(async () => [{ vendorProductCategoryId: 4 }]),
+            createVendorProductCategory: jest.fn(async () => ({ vendorProductCategoryId: 9 }))
+        }
+
+        createMarketOpsPublicRouter(sdk, { marketSetupService })
+
+        const route = router.records.post.find(
+            (entry) => entry.path === '/product-categories/create'
+        )
+        const req = {
+            body: {
+                slug: 'baked-goods',
+                label: 'Baked Goods',
+                isActive: '1'
+            },
+            user: { user_id: 7 }
+        }
+        const res = { redirect: jest.fn() }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(marketSetupService.createVendorProductCategory).toHaveBeenCalledWith(
+            expect.objectContaining({
+                slug: 'baked-goods',
+                label: 'Baked Goods',
+                sortOrder: 1,
+                createdByUserId: 7,
+                updatedByUserId: 7
+            })
+        )
+        expect(res.redirect).toHaveBeenCalledWith(
+            303,
+            '/market-ops/setup?notice=product-category-created&section=product_categories'
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('renders the product category editor with the stored active state in form values', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage)
+        const marketSetupService = {
+            getVendorProductCategoryById: jest.fn(async () => ({
+                vendorProductCategoryId: 9,
+                slug: 'baked-goods',
+                label: 'Baked Goods',
+                description: 'Fresh bread and pastries',
+                isActive: 0,
+                sortOrder: 3
+            }))
+        }
+
+        createMarketOpsPublicRouter(sdk, { marketSetupService })
+
+        const route = router.records.get.find(
+            (entry) => entry.path === '/product-categories/:vendorProductCategoryId'
+        )
+        const req = {
+            params: { vendorProductCategoryId: '9' },
+            query: {},
+            user: { user_id: 1 }
+        }
+        const res = { status: jest.fn().mockReturnThis() }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(renderPage).toHaveBeenCalledWith(
+            req,
+            res,
+            expect.objectContaining({
+                page: 'pages/market-ops/product-category-editor',
+                locals: expect.objectContaining({
+                    marketOpsVendorProductCategoryEditor: expect.objectContaining({
+                        formValues: expect.objectContaining({
+                            isActive: '0'
+                        })
+                    })
+                })
+            })
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('reorders product categories and redirects back to the setup tab', async () => {
+        const router = createRouterRecorder()
+        const sdk = createSdk(router, jest.fn())
+        const marketSetupService = {
+            reorderVendorProductCategories: jest.fn(async () => [])
+        }
+
+        createMarketOpsPublicRouter(sdk, { marketSetupService })
+
+        const route = router.records.post.find(
+            (entry) => entry.path === '/product-categories/reorder'
+        )
+        const req = {
+            body: {
+                orderedVendorProductCategoryIds: ['9', '4', '12']
+            },
+            user: { user_id: 7 }
+        }
+        const res = { redirect: jest.fn() }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(marketSetupService.reorderVendorProductCategories).toHaveBeenCalledWith(
+            [9, 4, 12],
+            7
+        )
+        expect(res.redirect).toHaveBeenCalledWith(
+            303,
+            '/market-ops/setup?notice=product-category-order-updated&section=product_categories'
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('updates a product category and redirects back to the setup tab', async () => {
+        const router = createRouterRecorder()
+        const sdk = createSdk(router, jest.fn())
+        const marketSetupService = {
+            getVendorProductCategoryById: jest.fn(async () => ({
+                vendorProductCategoryId: 9,
+                slug: 'baked-goods',
+                label: 'Baked Goods',
+                description: 'Fresh bread and pastries',
+                isActive: 1,
+                sortOrder: 3,
+                createdByUserId: 4
+            })),
+            updateVendorProductCategoryById: jest.fn(async () => ({
+                vendorProductCategoryId: 9
+            }))
+        }
+
+        createMarketOpsPublicRouter(sdk, { marketSetupService })
+
+        const route = router.records.post.find(
+            (entry) => entry.path === '/product-categories/:vendorProductCategoryId'
+        )
+        const req = {
+            params: { vendorProductCategoryId: '9' },
+            body: {
+                slug: 'baked-goods',
+                label: 'Baked Goods',
+                description: 'Fresh bread and pastries'
+            },
+            user: { user_id: 7 }
+        }
+        const res = { redirect: jest.fn() }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(marketSetupService.updateVendorProductCategoryById).toHaveBeenCalledWith(
+            9,
+            expect.objectContaining({
+                slug: 'baked-goods',
+                label: 'Baked Goods',
+                updatedByUserId: 7
+            })
+        )
+        expect(res.redirect).toHaveBeenCalledWith(
+            303,
+            '/market-ops/setup?notice=product-category-updated&section=product_categories'
         )
         expect(next).not.toHaveBeenCalled()
     })
