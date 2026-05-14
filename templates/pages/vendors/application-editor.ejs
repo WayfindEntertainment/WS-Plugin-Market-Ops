@@ -8,6 +8,9 @@
     const applicationMarkets = Array.isArray(editor.applicationMarkets) ? editor.applicationMarkets : []
     const paymentRecord = editor.paymentRecord || null
     const canSubmitApplication = editor.canSubmitApplication === true
+    const canResubmitApplication = editor.canResubmitApplication === true
+    const canWithdrawApplication = editor.canWithdrawApplication === true
+    const resubmitAction = editor.resubmitAction || ''
     const submitBlockedMessage = editor.submitBlockedMessage || ''
 %>
 
@@ -170,7 +173,22 @@
             </div>
         <% } %>
 
-        <% if (application.status === 'submitted') { %>
+        <% if (application.status === 'withdrawn' && canResubmitApplication) { %>
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="h5 mb-1">Resubmit Application</h2>
+                    <p class="text-body-secondary small mb-0">
+                        This application was withdrawn. Resubmit it when you are ready for the market owner to review it again.
+                    </p>
+                </div>
+                <div class="card-body">
+                    <form action="<%= resubmitAction %>" method="post" class="d-grid">
+                        <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                        <button class="btn btn-success" type="submit">Resubmit Application</button>
+                    </form>
+                </div>
+            </div>
+        <% } else if (application.status === 'submitted' && canWithdrawApplication) { %>
             <div class="card">
                 <div class="card-header">
                     <h2 class="h5 mb-1">Withdraw Application</h2>
@@ -181,6 +199,15 @@
                         <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
                         <button class="btn btn-outline-danger" type="submit">Withdraw Application</button>
                     </form>
+                </div>
+            </div>
+        <% } else if (application.status === 'submitted') { %>
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="h5 mb-1">Application Under Review</h2>
+                    <p class="text-body-secondary small mb-0">
+                        This application has already entered review and can no longer be withdrawn online.
+                    </p>
                 </div>
             </div>
         <% } %>

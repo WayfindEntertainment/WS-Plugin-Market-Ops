@@ -4,6 +4,26 @@ describe('Market Ops plugin declaration', () => {
     test('declares Market Ops as a parent sidebar group with the expected child order', () => {
         expect(marketOpsPlugin.navigation).toEqual([
             expect.objectContaining({
+                id: 'public-markets',
+                location: 'sidebar',
+                label: 'Markets',
+                icon: 'calendar-week',
+                href: '/markets',
+                index: 1,
+                parent: null,
+                allowChildren: false
+            }),
+            expect.objectContaining({
+                id: 'public-vendors',
+                location: 'sidebar',
+                label: 'Vendors',
+                icon: 'shop-window',
+                href: '/vendors',
+                index: 2,
+                parent: null,
+                allowChildren: false
+            }),
+            expect.objectContaining({
                 id: 'market-ops',
                 location: 'sidebar',
                 label: 'Market Ops',
@@ -54,6 +74,9 @@ describe('Market Ops plugin declaration', () => {
         expect(marketOpsPlugin.routes.public).toEqual([
             expect.objectContaining({
                 staticMountPath: '/market-ops'
+            }),
+            expect.objectContaining({
+                staticMountPath: '/markets'
             }),
             expect.objectContaining({
                 staticMountPath: '/new-vendors'

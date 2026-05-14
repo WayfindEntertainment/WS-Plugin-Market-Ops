@@ -1,8 +1,32 @@
 import { createMarketOpsPublicRouter } from './routes.js'
-import { createMarketOpsNewVendorsRouter, createMarketOpsVendorsRouter } from './vendor-routes.js'
+import {
+    createMarketOpsMarketsRouter,
+    createMarketOpsNewVendorsRouter,
+    createMarketOpsVendorsRouter
+} from './vendor-routes.js'
 
 const marketOpsPlugin = {
     navigation: [
+        {
+            id: 'public-markets',
+            location: 'sidebar',
+            label: 'Markets',
+            icon: 'calendar-week',
+            href: '/markets',
+            index: 1,
+            parent: null,
+            allowChildren: false
+        },
+        {
+            id: 'public-vendors',
+            location: 'sidebar',
+            label: 'Vendors',
+            icon: 'shop-window',
+            href: '/vendors',
+            index: 2,
+            parent: null,
+            allowChildren: false
+        },
         {
             id: 'market-ops',
             location: 'sidebar',
@@ -97,6 +121,10 @@ const marketOpsPlugin = {
             {
                 staticMountPath: '/market-ops',
                 createRouter: createMarketOpsPublicRouter
+            },
+            {
+                staticMountPath: '/markets',
+                createRouter: createMarketOpsMarketsRouter
             },
             {
                 staticMountPath: '/new-vendors',

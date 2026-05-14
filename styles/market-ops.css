@@ -94,3 +94,105 @@
 .market-ops-sortable-dirty [data-market-ops-product-category-save] {
     box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.12);
 }
+
+.market-ops-vendor-directory-filter {
+    max-width: 100%;
+}
+
+.market-ops-vendor-directory-category-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.market-ops-vendor-directory-category-grid-modal {
+    max-height: 26rem;
+    overflow-y: auto;
+    align-content: flex-start;
+}
+
+.market-ops-vendor-directory-category-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 0.85rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    background-color: var(--bs-body-bg);
+    cursor: pointer;
+    transition:
+        background-color 0.18s ease,
+        border-color 0.18s ease,
+        box-shadow 0.18s ease,
+        transform 0.18s ease;
+}
+
+.market-ops-vendor-directory-category-option:hover,
+.market-ops-vendor-directory-category-option:focus-within {
+    background-color: rgba(var(--bs-primary-rgb), 0.04);
+    border-color: rgba(var(--bs-primary-rgb), 0.24);
+    box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.04);
+    transform: translateY(-1px);
+}
+
+.market-ops-vendor-directory-item {
+    transition:
+        opacity 0.22s ease,
+        transform 0.22s ease;
+}
+
+.market-ops-vendor-directory-item-entering {
+    opacity: 0;
+    transform: translateY(10px);
+}
+
+.market-ops-vendor-directory-item-leaving {
+    opacity: 0;
+    transform: translateY(-10px);
+}
+
+.market-ops-vendor-directory-item-hidden {
+    display: none;
+}
+
+.market-ops-vendor-directory-empty-state .card-body {
+    max-width: 42rem;
+}
+
+.market-ops-public-market-card {
+    transition:
+        background-color 0.22s ease,
+        border-color 0.22s ease,
+        box-shadow 0.22s ease,
+        transform 0.22s ease;
+}
+
+.market-ops-public-market-card:hover,
+.market-ops-public-market-card:focus-visible {
+    background-color: rgba(var(--bs-primary-rgb), 0.08);
+    border-color: rgba(var(--bs-primary-rgb), 0.24);
+    box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+}
+
+.market-ops-public-market-card:hover .market-ops-public-market-card-meta,
+.market-ops-public-market-card:focus-visible .market-ops-public-market-card-meta {
+    color: var(--bs-body-color);
+}
+
+@media (max-width: 767.98px) {
+    .market-ops-vendor-directory-category-grid {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .market-ops-vendor-directory-category-option {
+        width: 100%;
+    }
+}
+
+@media (min-width: 768px) {
+    .market-ops-vendor-directory-category-grid-modal .market-ops-vendor-directory-category-option {
+        width: calc(50% - 0.375rem);
+    }
+}

@@ -229,4 +229,128 @@ describe('createMarketOpsApplicationService', () => {
             })
         )
     })
+
+    test('rejects withdrawal once any selection has been reviewed', async () => {
+        const database = createDatabase()
+        const dependencies = {
+            getVendorBusinessById: jest.fn(),
+            getMarketGroupById: jest.fn(),
+            listMarketsByMarketGroupId: jest.fn(),
+            getMarketById: jest.fn(),
+            listMarketBoothOfferingsByMarketId: jest.fn(),
+            getMarketBoothOfferingById: jest.fn(),
+            insertVendorMarketApplication: jest.fn(),
+            getVendorMarketApplicationById: jest.fn(async () => ({
+                vendorApplicationId: 31,
+                vendorBusinessId: 11,
+                marketGroupId: 5,
+                applicationKey: '01KRCF2N9DW9N3Q7F53QBM0A1A',
+                status: 'submitted',
+                feeModeSnapshot: 'none',
+                feeTotalCents: 0,
+                submittedAt: 1000,
+                submittedByUserId: 7,
+                createdAt: 1000,
+                createdByUserId: 7,
+                updatedAt: 1000,
+                updatedByUserId: 7
+            })),
+            listVendorMarketApplicationsByVendorBusinessId: jest.fn(),
+            updateVendorMarketApplicationById: jest.fn(),
+            insertApplicationMarketSelection: jest.fn(),
+            listApplicationMarketSelectionsByVendorApplicationId: jest.fn(async () => [
+                {
+                    applicationMarketSelectionId: 41,
+                    vendorApplicationId: 31,
+                    marketId: 8,
+                    selectionStatus: 'approved'
+                }
+            ]),
+            deleteApplicationMarketSelectionsByVendorApplicationId: jest.fn(),
+            insertApplicationMarketBoothPreference: jest.fn(),
+            listApplicationMarketBoothPreferencesBySelectionId: jest.fn()
+        }
+        const service = createMarketOpsApplicationService(database, dependencies)
+
+        await expect(service.withdrawVendorMarketApplication(31)).rejects.toThrow(
+            expect.objectContaining({
+                code: 'VENDOR_MARKET_APPLICATION_REVIEW_ALREADY_STARTED'
+            })
+        )
+        expect(dependencies.updateVendorMarketApplicationById).not.toHaveBeenCalled()
+    })
+
+    test('resubmits a withdrawn application with its existing fee snapshot', async () => {
+        const database = createDatabase()
+        const dependencies = {
+            getVendorBusinessById: jest.fn(async () => ({
+                vendorBusinessId: 11,
+                approvalStatus: 'approved'
+            })),
+            getMarketGroupById: jest.fn(async () => ({
+                marketGroupId: 5,
+                feeMode: 'per_group',
+                feeAmountCents: 2500
+            })),
+            listMarketsByMarketGroupId: jest.fn(),
+            getMarketById: jest.fn(),
+            listMarketBoothOfferingsByMarketId: jest.fn(),
+            getMarketBoothOfferingById: jest.fn(),
+            insertVendorMarketApplication: jest.fn(),
+            getVendorMarketApplicationById: jest.fn(async () => ({
+                vendorApplicationId: 31,
+                vendorBusinessId: 11,
+                marketGroupId: 5,
+                applicationKey: '01KRCF2N9DW9N3Q7F53QBM0A1A',
+                status: 'withdrawn',
+                feeModeSnapshot: 'per_group',
+                feeTotalCents: 2500,
+                submittedAt: 1000,
+                submittedByUserId: 7,
+                createdAt: 1000,
+                createdByUserId: 7,
+                updatedAt: 1000,
+                updatedByUserId: 7
+            })),
+            listVendorMarketApplicationsByVendorBusinessId: jest.fn(),
+            updateVendorMarketApplicationById: jest.fn(),
+            insertApplicationMarketSelection: jest.fn(),
+            listApplicationMarketSelectionsByVendorApplicationId: jest.fn(async () => [
+                {
+                    applicationMarketSelectionId: 41,
+                    vendorApplicationId: 31,
+                    marketId: 8,
+                    selectionStatus: 'withdrawn',
+                    requestedBoothQuantity: 1,
+                    willingToVolunteer: 0
+                }
+            ]),
+            deleteApplicationMarketSelectionsByVendorApplicationId: jest.fn(),
+            insertApplicationMarketBoothPreference: jest.fn(),
+            listApplicationMarketBoothPreferencesBySelectionId: jest.fn(async () => [])
+        }
+        const service = createMarketOpsApplicationService(database, dependencies)
+
+        await service.resubmitVendorMarketApplication(31, {
+            submittedAt: 2000,
+            submittedByUserId: 12,
+            updatedByUserId: 12
+        })
+
+        expect(dependencies.updateVendorMarketApplicationById).toHaveBeenCalledWith(
+            expect.any(Object),
+            31,
+            expect.objectContaining({
+                vendorBusinessId: 11,
+                marketGroupId: 5,
+                applicationKey: '01KRCF2N9DW9N3Q7F53QBM0A1A',
+                status: 'submitted',
+                feeModeSnapshot: 'per_group',
+                feeTotalCents: 2500,
+                submittedAt: 2000,
+                submittedByUserId: 12,
+                updatedByUserId: 12
+            })
+        )
+    })
 })

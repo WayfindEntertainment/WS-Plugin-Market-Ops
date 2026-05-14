@@ -316,6 +316,11 @@ const defaultDependencies = {
  *     submittedByUserId?: number|null,
  *     updatedByUserId?: number|null
  *   }) => Promise<ReturnType<typeof buildApplicationDetail>>,
+ *   resubmitVendorMarketApplication: (vendorApplicationId: number, input?: {
+ *     submittedAt?: number,
+ *     submittedByUserId?: number|null,
+ *     updatedByUserId?: number|null
+ *   }) => Promise<ReturnType<typeof buildApplicationDetail>>,
  *   withdrawVendorMarketApplication: (vendorApplicationId: number, input?: {
  *     updatedByUserId?: number|null
  *   }) => Promise<ReturnType<typeof buildApplicationDetail>>
@@ -917,6 +922,79 @@ export function createMarketOpsApplicationService(database, overrides = {}) {
             })
         },
 
+        async resubmitVendorMarketApplication(vendorApplicationId, input = {}) {
+            const normalizedVendorApplicationId = assertPositiveInteger(
+                vendorApplicationId,
+                'vendorApplicationId',
+                'INVALID_VENDOR_APPLICATION_ID'
+            )
+            const submittedAt =
+                typeof input.submittedAt === 'undefined'
+                    ? Date.now()
+                    : assertPositiveInteger(
+                          input.submittedAt,
+                          'submittedAt',
+                          'INVALID_VENDOR_MARKET_APPLICATION_SUBMITTED_AT'
+                      )
+            const submittedByUserId = normalizeOptionalPositiveInteger(
+                input.submittedByUserId,
+                'submittedByUserId',
+                'INVALID_VENDOR_MARKET_APPLICATION_SUBMITTED_BY_USER_ID'
+            )
+            const updatedByUserId = normalizeOptionalPositiveInteger(
+                input.updatedByUserId,
+                'updatedByUserId',
+                'INVALID_VENDOR_MARKET_APPLICATION_UPDATED_BY_USER_ID'
+            )
+
+            return normalizedDatabase.withTransaction(async (conn) => {
+                const currentApplication = await requireVendorApplication(
+                    conn,
+                    normalizedVendorApplicationId
+                )
+
+                if (currentApplication.status !== 'withdrawn') {
+                    throw createServiceError(
+                        'VENDOR_MARKET_APPLICATION_NOT_WITHDRAWN',
+                        `Only withdrawn applications can be resubmitted: ${normalizedVendorApplicationId}`
+                    )
+                }
+
+                const [vendorBusiness, currentSelections] = await Promise.all([
+                    requireApprovedVendorBusiness(conn, currentApplication.vendorBusinessId),
+                    dependencies.listApplicationMarketSelectionsByVendorApplicationId(
+                        conn,
+                        normalizedVendorApplicationId
+                    )
+                ])
+
+                if (currentSelections.length === 0) {
+                    throw createServiceError(
+                        'VENDOR_MARKET_APPLICATION_HAS_NO_SELECTIONS',
+                        `Vendor market application must select at least one market before resubmission: ${normalizedVendorApplicationId}`
+                    )
+                }
+
+                await dependencies.updateVendorMarketApplicationById(
+                    conn,
+                    normalizedVendorApplicationId,
+                    {
+                        vendorBusinessId: vendorBusiness.vendorBusinessId,
+                        marketGroupId: currentApplication.marketGroupId,
+                        applicationKey: currentApplication.applicationKey,
+                        status: 'submitted',
+                        feeModeSnapshot: currentApplication.feeModeSnapshot,
+                        feeTotalCents: currentApplication.feeTotalCents,
+                        submittedAt,
+                        submittedByUserId,
+                        updatedByUserId
+                    }
+                )
+
+                return loadApplicationDetail(conn, normalizedVendorApplicationId)
+            })
+        },
+
         async withdrawVendorMarketApplication(vendorApplicationId, input = {}) {
             const normalizedVendorApplicationId = assertPositiveInteger(
                 vendorApplicationId,
@@ -939,6 +1017,28 @@ export function createMarketOpsApplicationService(database, overrides = {}) {
                     throw createServiceError(
                         'INVALID_VENDOR_MARKET_APPLICATION_STATUS',
                         `Vendor market application has unsupported status: ${currentApplication.status}`
+                    )
+                }
+
+                if (currentApplication.status !== 'submitted') {
+                    throw createServiceError(
+                        'VENDOR_MARKET_APPLICATION_NOT_SUBMITTED',
+                        `Only submitted applications can be withdrawn: ${normalizedVendorApplicationId}`
+                    )
+                }
+
+                const currentSelections =
+                    await dependencies.listApplicationMarketSelectionsByVendorApplicationId(
+                        conn,
+                        normalizedVendorApplicationId
+                    )
+
+                if (
+                    currentSelections.some((selection) => selection.selectionStatus !== 'requested')
+                ) {
+                    throw createServiceError(
+                        'VENDOR_MARKET_APPLICATION_REVIEW_ALREADY_STARTED',
+                        `Reviewed applications can no longer be withdrawn: ${normalizedVendorApplicationId}`
                     )
                 }
 

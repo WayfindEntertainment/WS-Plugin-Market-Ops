@@ -3,6 +3,7 @@
     const detail = pageData.vendorDetail || {}
     const vendorBusiness = detail.vendorBusiness || {}
     const categories = Array.isArray(detail.productCategoryAssignments) ? detail.productCategoryAssignments : []
+    const upcomingMarkets = Array.isArray(pageData.upcomingMarkets) ? pageData.upcomingMarkets : []
     const canManageVendorBusiness = pageData.canManageVendorBusiness === true
     const websiteUrl =
         typeof vendorBusiness.websiteUrl === 'string' && vendorBusiness.websiteUrl.trim().length > 0
@@ -70,6 +71,51 @@
                         <% categories.forEach((assignment) => { if (assignment.category) { %>
                             <span class="badge text-bg-light border"><%= assignment.category.label %></span>
                         <% } }) %>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h2 class="h5 mb-1">Upcoming Markets</h2>
+            </div>
+            <div class="card-body">
+                <% if (upcomingMarkets.length === 0) { %>
+                    <p class="text-body-secondary mb-0">This vendor has no upcoming approved market dates listed right now.</p>
+                <% } else { %>
+                    <div class="d-flex flex-column gap-3">
+                        <% upcomingMarkets.forEach((marketCard) => { %>
+                            <% if (marketCard.href) { %>
+                                <a class="border rounded px-3 py-2 text-decoration-none text-reset d-block" href="<%= marketCard.href %>">
+                                    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-2">
+                                        <div>
+                                            <h3 class="h6 mb-1"><%= marketCard.marketName %></h3>
+                                            <p class="small text-body-secondary mb-0"><%= marketCard.marketGroupName %></p>
+                                        </div>
+                                        <div class="text-lg-end">
+                                            <div class="fw-semibold"><%= marketCard.dayLabel %></div>
+                                            <div class="small text-body-secondary"><%= marketCard.timeRangeLabel %></div>
+                                        </div>
+                                    </div>
+                                    <p class="small text-body-secondary mt-2 mb-0"><%= marketCard.locationName %></p>
+                                </a>
+                            <% } else { %>
+                                <section class="border rounded px-3 py-2">
+                                    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-2">
+                                        <div>
+                                            <h3 class="h6 mb-1"><%= marketCard.marketName %></h3>
+                                            <p class="small text-body-secondary mb-0"><%= marketCard.marketGroupName %></p>
+                                        </div>
+                                        <div class="text-lg-end">
+                                            <div class="fw-semibold"><%= marketCard.dayLabel %></div>
+                                            <div class="small text-body-secondary"><%= marketCard.timeRangeLabel %></div>
+                                        </div>
+                                    </div>
+                                    <p class="small text-body-secondary mt-2 mb-0"><%= marketCard.locationName %></p>
+                                </section>
+                            <% } %>
+                        <% }) %>
                     </div>
                 <% } %>
             </div>

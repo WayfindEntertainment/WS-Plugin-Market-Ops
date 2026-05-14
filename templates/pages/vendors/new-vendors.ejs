@@ -5,6 +5,9 @@
     const ownedBusinesses = Array.isArray(pageData.ownedBusinesses) ? pageData.ownedBusinesses : []
 %>
 
+<link rel="stylesheet" href="/plugin-assets/ws_plugin_market_ops/styles/market-ops.css" />
+<script src="/plugin-assets/ws_plugin_market_ops/scripts/new-vendors.js" defer></script>
+
 <div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3 mb-4">
     <div>
         <h1 class="h3 mb-2">New Vendors</h1>
@@ -128,24 +131,89 @@
                                     No product categories are available yet. You can still create your business now and add categories later.
                                 </div>
                             <% } else { %>
-                                <div class="d-flex flex-column gap-2">
-                                    <% categoryOptions.forEach((category) => { %>
-                                    <label class="border rounded p-3 d-flex flex-column gap-2">
-                                            <span class="d-flex align-items-center gap-2">
-                                                <input
-                                                    class="form-check-input mt-0"
-                                                    type="checkbox"
-                                                    name="productCategoryIds"
-                                                    value="<%= category.vendorProductCategoryId %>"
-                                                    <%= category.isSelected ? 'checked' : '' %>
-                                                />
-                                                <span class="fw-semibold"><%= category.label %></span>
-                                            </span>
-                                            <% if (category.description) { %>
-                                                <span class="small text-body-secondary"><%= category.description %></span>
-                                            <% } %>
-                                        </label>
-                                    <% }) %>
+                                <div class="border rounded p-3">
+                                    <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3">
+                                        <div>
+                                            <div class="small text-body-secondary" data-new-vendors-category-summary>
+                                                No categories selected yet.
+                                            </div>
+                                            <div class="form-text mb-0">
+                                                Choose the categories that best match what you sell. You can change these later.
+                                            </div>
+                                        </div>
+                                        <button
+                                            class="btn btn-outline-primary"
+                                            type="button"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#new-vendors-category-modal"
+                                        >
+                                            Choose Categories
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div
+                                    id="new-vendors-category-modal"
+                                    class="modal fade"
+                                    tabindex="-1"
+                                    aria-labelledby="new-vendors-category-modal-title"
+                                    aria-hidden="true"
+                                >
+                                    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h2 id="new-vendors-category-modal-title" class="modal-title fs-5">Choose Product Categories</h2>
+                                                <button
+                                                    type="button"
+                                                    class="btn-close"
+                                                    data-bs-dismiss="modal"
+                                                    aria-label="Close"
+                                                ></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <p class="text-body-secondary small mb-3">
+                                                    Pick any categories that fit your business. You can update these later from your manage page.
+                                                </p>
+                                                <div class="market-ops-vendor-directory-category-grid market-ops-vendor-directory-category-grid-modal">
+                                                    <% categoryOptions.forEach((category) => { %>
+                                                        <label class="market-ops-vendor-directory-category-option">
+                                                            <input
+                                                                class="form-check-input mt-0"
+                                                                type="checkbox"
+                                                                name="productCategoryIds"
+                                                                value="<%= category.vendorProductCategoryId %>"
+                                                                data-new-vendors-category
+                                                                data-new-vendors-category-label="<%= category.label %>"
+                                                                <%= category.isSelected ? 'checked' : '' %>
+                                                            />
+                                                            <span class="d-flex flex-column gap-1">
+                                                                <span class="fw-semibold"><%= category.label %></span>
+                                                                <% if (category.description) { %>
+                                                                    <span class="small text-body-secondary"><%= category.description %></span>
+                                                                <% } %>
+                                                            </span>
+                                                        </label>
+                                                    <% }) %>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer justify-content-between">
+                                                <button
+                                                    class="btn btn-outline-secondary"
+                                                    type="button"
+                                                    data-new-vendors-category-clear
+                                                >
+                                                    Clear Categories
+                                                </button>
+                                                <button
+                                                    class="btn btn-primary"
+                                                    type="button"
+                                                    data-bs-dismiss="modal"
+                                                >
+                                                    Done
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             <% } %>
                         </div>

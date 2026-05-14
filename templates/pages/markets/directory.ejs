@@ -1,0 +1,68 @@
+<%
+    const pageData = marketOpsMarketsDirectoryPageData || {}
+    const marketGroupCards = Array.isArray(pageData.marketGroupCards) ? pageData.marketGroupCards : []
+%>
+
+<link rel="stylesheet" href="/plugin-assets/ws_plugin_market_ops/styles/market-ops.css" />
+
+<div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3 mb-4">
+    <div>
+        <h1 class="h3 mb-2">Upcoming Markets</h1>
+        <p class="text-body-secondary mb-0">
+            Browse public market dates, see when applications are open, and find the events that are coming up next.
+        </p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-secondary" href="/vendors">View Vendors</a>
+        <a class="btn btn-outline-primary" href="/new-vendors">Become a Vendor</a>
+    </div>
+</div>
+
+<%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash: pageData.flash }) %>
+
+<div class="row g-3">
+    <% if (marketGroupCards.length === 0) { %>
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-body-secondary">
+                    No public markets are listed yet.
+                </div>
+            </div>
+        </div>
+    <% } %>
+    <% marketGroupCards.forEach((marketGroupCard) => { %>
+        <div class="col-12 col-xxl-8">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h2 class="h4 mb-2"><%= marketGroupCard.groupName %></h2>
+                        <p class="text-body-secondary mb-0"><%= marketGroupCard.summary %></p>
+                    </div>
+
+                    <div class="list-group list-group-flush border rounded overflow-hidden">
+                        <% marketGroupCard.markets.forEach((marketCard) => { %>
+                            <a
+                                class="list-group-item list-group-item-action py-3 text-decoration-none market-ops-public-market-card"
+                                href="<%= marketCard.href %>"
+                            >
+                                <div class="d-flex flex-column gap-2">
+                                    <div>
+                                        <div class="fw-semibold"><%= marketCard.marketName %></div>
+                                        <div class="small text-body-secondary market-ops-public-market-card-meta">
+                                            <%= marketCard.dayLabel %> · <%= marketCard.timeRangeLabel %>
+                                        </div>
+                                    </div>
+                                    <div class="small text-body-secondary market-ops-public-market-card-meta"><%= marketCard.locationName %></div>
+                                    <% if (marketCard.summary) { %>
+                                        <div class="small text-body-secondary market-ops-public-market-card-meta"><%= marketCard.summary %></div>
+                                    <% } %>
+                                    <div class="small"><%= marketCard.applicationWindow.message %></div>
+                                </div>
+                            </a>
+                        <% }) %>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <% }) %>
+</div>

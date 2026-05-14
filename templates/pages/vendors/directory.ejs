@@ -1,13 +1,16 @@
 <%
     const pageData = marketOpsVendorDirectoryPageData || {}
     const vendorCards = Array.isArray(pageData.vendorCards) ? pageData.vendorCards : []
+    const categoryOptions = Array.isArray(pageData.categoryOptions) ? pageData.categoryOptions : []
 %>
+
+<link rel="stylesheet" href="/plugin-assets/ws_plugin_market_ops/styles/market-ops.css" />
 
 <div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3 mb-4">
     <div>
-        <h1 class="h3 mb-2">Approved Vendors</h1>
+        <h1 class="h3 mb-2">Vendors</h1>
         <p class="text-body-secondary mb-0">
-            Explore the businesses that are currently approved to participate in upcoming markets.
+            Explore the businesses that are participating in our upcoming markets.
         </p>
     </div>
     <a class="btn btn-outline-primary" href="/new-vendors">Become a Vendor</a>
@@ -15,7 +18,89 @@
 
 <%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash: pageData.flash }) %>
 
-<div class="row g-3">
+<section class="row g-3 mb-4">
+    <div class="col-12 col-xxl-8">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex flex-column flex-lg-row align-items-lg-start justify-content-between gap-3 mb-3">
+                    <div>
+                        <h2 class="h5 mb-0">Find a Vendor</h2>
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="small text-body-secondary" data-vendor-directory-results-count>
+                            <%= vendorCards.length %> vendor<%= vendorCards.length === 1 ? '' : 's' %>
+                        </div>
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary btn-sm"
+                            data-vendor-directory-clear
+                        >
+                            Clear Filters
+                        </button>
+                    </div>
+                </div>
+                <div
+                    class="market-ops-vendor-directory-filter"
+                    data-vendor-directory-filter-root
+                >
+                    <div class="mb-3">
+                        <label class="form-label" for="vendor-directory-search">Search Vendors</label>
+                        <input
+                            id="vendor-directory-search"
+                            class="form-control"
+                            type="search"
+                            placeholder="Search by business name or tag line"
+                            data-vendor-directory-search
+                        />
+                    </div>
+                    <% if (categoryOptions.length > 0) { %>
+                        <div class="d-flex flex-column flex-lg-row align-items-lg-start justify-content-between gap-3">
+                            <div>
+                                <div class="form-label mb-1">Product Categories</div>
+                                <div
+                                    class="small text-body-secondary"
+                                    data-vendor-directory-category-summary
+                                >
+                                    All categories
+                                </div>
+                            </div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-primary btn-sm"
+                                    data-vendor-directory-open-category-modal
+                                >
+                                    Filter Categories
+                                </button>
+                            </div>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div
+    class="card mb-3 market-ops-vendor-directory-empty-state d-none"
+    data-vendor-directory-empty-state
+>
+    <div class="card-body">
+        <div class="fw-semibold mb-2">No vendors match those filters.</div>
+        <p class="text-body-secondary mb-3">
+            Try clearing the search box or removing one or more product categories.
+        </p>
+        <button
+            type="button"
+            class="btn btn-outline-secondary btn-sm"
+            data-vendor-directory-empty-clear
+        >
+            Clear Filters
+        </button>
+    </div>
+</div>
+
+<div class="row g-3" data-vendor-directory-results>
     <% if (vendorCards.length === 0) { %>
         <div class="col-12">
             <div class="card">
@@ -26,7 +111,13 @@
         </div>
     <% } %>
     <% vendorCards.forEach((vendorCard) => { %>
-        <div class="col-12 col-xxl-8">
+        <div
+            class="col-12 col-xxl-8 market-ops-vendor-directory-item"
+            data-vendor-directory-item
+            data-business-name="<%= vendorCard.searchBusinessName %>"
+            data-summary="<%= vendorCard.searchSummary %>"
+            data-category-ids="<%= vendorCard.categoryIds.join(',') %>"
+        >
             <a class="card text-decoration-none text-reset h-100" href="/vendors/<%= vendorCard.slug %>">
                 <div class="card-body">
                     <div class="d-flex align-items-center justify-content-between gap-3 mb-2">
@@ -43,3 +134,67 @@
         </div>
     <% }) %>
 </div>
+
+<% if (categoryOptions.length > 0) { %>
+    <div
+        class="modal fade"
+        id="vendorDirectoryCategoryModal"
+        tabindex="-1"
+        aria-labelledby="vendorDirectoryCategoryModalLabel"
+        aria-hidden="true"
+        data-vendor-directory-category-modal
+    >
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h2 class="modal-title h5 mb-1" id="vendorDirectoryCategoryModalLabel">
+                            Filter by Product Category
+                        </h2>
+                        <p class="text-body-secondary small mb-0">
+                            If you check more than one category, vendors matching any selected category will be shown.
+                        </p>
+                        <p class="text-body-secondary small mb-0">
+                            Clearing all selections will show all vendors.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close"
+                    ></button>
+                </div>
+                <div class="modal-body">
+                    <div class="market-ops-vendor-directory-category-grid market-ops-vendor-directory-category-grid-modal">
+                        <% categoryOptions.forEach((categoryOption) => { %>
+                            <label class="market-ops-vendor-directory-category-option">
+                                <input
+                                    class="form-check-input mt-0"
+                                    type="checkbox"
+                                    value="<%= categoryOption.vendorProductCategoryId %>"
+                                    data-vendor-directory-category
+                                />
+                                <span><%= categoryOption.label %></span>
+                            </label>
+                        <% }) %>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button
+                        type="button"
+                        class="btn btn-outline-secondary"
+                        data-vendor-directory-clear
+                    >
+                        Clear
+                    </button>
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                        Done
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+<% } %>
+
+<script src="/plugin-assets/ws_plugin_market_ops/scripts/vendor-directory.js"></script>

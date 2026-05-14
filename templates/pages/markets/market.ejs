@@ -1,0 +1,51 @@
+<%
+    const pageData = marketOpsMarketDetailPageData || {}
+    const marketCard = pageData.marketCard || {}
+%>
+
+<div class="d-flex flex-column gap-3 mb-4">
+    <div>
+        <a class="text-decoration-none small d-inline-block mb-2" href="/markets">Back to Markets</a>
+        <h1 class="h3 mb-2"><%= marketCard.marketName || 'Market' %></h1>
+        <p class="text-body-secondary mb-0"><%= marketCard.marketGroupName || 'Market Series' %></p>
+    </div>
+</div>
+
+<%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash: pageData.flash }) %>
+
+<section class="row g-4">
+    <div class="col-12 col-xxl-8">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="h5 mb-1">Market Details</h2>
+            </div>
+            <div class="card-body">
+                <% if (marketCard.description || marketCard.summary) { %>
+                    <p class="mb-0"><%= marketCard.description || marketCard.summary %></p>
+                <% } else { %>
+                    <p class="text-body-secondary mb-0">More details about this market will be posted soon.</p>
+                <% } %>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xxl-4">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="h5 mb-1">When and Where</h2>
+            </div>
+            <div class="card-body">
+                <dl class="row small mb-0">
+                    <dt class="col-sm-4">Date</dt>
+                    <dd class="col-sm-8"><%= marketCard.dayLabel || 'TBD' %></dd>
+                    <dt class="col-sm-4">Time</dt>
+                    <dd class="col-sm-8"><%= marketCard.timeRangeLabel || 'TBD' %></dd>
+                    <dt class="col-sm-4">Location</dt>
+                    <dd class="col-sm-8"><%= marketCard.locationName || 'Location to be announced' %></dd>
+                    <dt class="col-sm-4">Applications</dt>
+                    <dd class="col-sm-8"><%= marketCard.applicationWindow?.message || 'Applications are not open at this time.' %></dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</section>

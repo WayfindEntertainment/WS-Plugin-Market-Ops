@@ -33,6 +33,7 @@ const VENDOR_NOTICE_MESSAGES = {
     'application-created': { type: 'success', message: 'Application draft created.' },
     'application-updated': { type: 'success', message: 'Application draft updated.' },
     'application-submitted': { type: 'success', message: 'Application submitted.' },
+    'application-resubmitted': { type: 'success', message: 'Application resubmitted.' },
     'application-withdrawn': { type: 'success', message: 'Application withdrawn.' }
 }
 
@@ -95,6 +96,10 @@ function normalizeOptionalString(value) {
     const normalizedValue = normalizeTrimmedString(value)
 
     return normalizedValue.length > 0 ? normalizedValue : null
+}
+
+function normalizeSearchText(value) {
+    return normalizeTrimmedString(value).toLowerCase().replace(/\s+/g, ' ')
 }
 
 function slugifyVendorBusinessName(value) {
@@ -235,6 +240,9 @@ function isRecoverableVendorRouteError(err) {
                 'EMPTY_VENDOR_MARKET_APPLICATION_SELECTIONS',
                 'VENDOR_MARKET_APPLICATION_ALREADY_SUBMITTED',
                 'VENDOR_MARKET_APPLICATION_ALREADY_WITHDRAWN',
+                'VENDOR_MARKET_APPLICATION_NOT_WITHDRAWN',
+                'VENDOR_MARKET_APPLICATION_NOT_SUBMITTED',
+                'VENDOR_MARKET_APPLICATION_REVIEW_ALREADY_STARTED',
                 'VENDOR_BUSINESS_NOT_REJECTED',
                 'ER_DUP_ENTRY'
             ].includes(err.code))
@@ -470,11 +478,44 @@ function buildVendorDirectoryCards(details) {
             detail.vendorBusiness.summary ||
             detail.vendorBusiness.description ||
             'Vendor profile coming soon.',
+        searchBusinessName: normalizeSearchText(detail.vendorBusiness.businessName),
+        searchSummary: normalizeSearchText(
+            detail.vendorBusiness.summary || detail.vendorBusiness.description || ''
+        ),
         primaryCategoryLabel: detail.productCategoryAssignments[0]?.category?.label ?? null,
+        categoryIds: detail.productCategoryAssignments.map((assignment) =>
+            String(assignment.vendorProductCategoryId)
+        ),
         categoryLabels: detail.productCategoryAssignments
             .map((assignment) => assignment.category?.label)
             .filter(Boolean)
     }))
+}
+
+function buildVendorDirectoryCategoryOptions(details) {
+    const categoriesById = new Map()
+
+    for (const detail of Array.isArray(details) ? details : []) {
+        for (const assignment of Array.isArray(detail?.productCategoryAssignments)
+            ? detail.productCategoryAssignments
+            : []) {
+            const categoryId = assignment?.vendorProductCategoryId
+            const label = normalizeTrimmedString(assignment?.category?.label)
+
+            if (typeof categoryId === 'number' && label) {
+                categoriesById.set(String(categoryId), {
+                    vendorProductCategoryId: String(categoryId),
+                    label
+                })
+            }
+        }
+    }
+
+    return [...categoriesById.values()].sort(
+        (left, right) =>
+            left.label.localeCompare(right.label) ||
+            left.vendorProductCategoryId.localeCompare(right.vendorProductCategoryId)
+    )
 }
 
 function buildVendorCreateCategoryOptions(categories, formValues) {
@@ -589,6 +630,100 @@ function buildMarketOpportunityCards(marketGroups, marketsByGroupId, application
     })
 }
 
+function createLocationNameMap(locations) {
+    const locationNameMap = new Map()
+
+    for (const location of Array.isArray(locations) ? locations : []) {
+        if (location && typeof location.locationId === 'number') {
+            locationNameMap.set(location.locationId, location.locationName)
+        }
+    }
+
+    return locationNameMap
+}
+
+function formatMarketTimeRange(startsAt, endsAt) {
+    if (!Number.isFinite(Number(startsAt))) {
+        return 'Time unavailable'
+    }
+
+    const startLabel = MARKET_TIME_FORMATTER.format(Number(startsAt))
+
+    if (!Number.isFinite(Number(endsAt))) {
+        return startLabel
+    }
+
+    return `${startLabel} - ${MARKET_TIME_FORMATTER.format(Number(endsAt))}`
+}
+
+function buildPublicMarketDirectoryCards(
+    marketGroups,
+    marketsByGroupId,
+    locations,
+    now = Date.now()
+) {
+    const locationNameMap = createLocationNameMap(locations)
+
+    return (Array.isArray(marketGroups) ? marketGroups : [])
+        .filter((marketGroup) => marketGroup?.isPublic === 1)
+        .map((marketGroup) => {
+            const markets = (marketsByGroupId.get(marketGroup.marketGroupId) ?? [])
+                .filter((market) => market?.isPublic === 1)
+                .map((market) => ({
+                    marketId: market.marketId,
+                    marketName: market.marketName || 'Market',
+                    marketSlug: market.slug || '',
+                    summary: market.summary || market.description || null,
+                    dayLabel: MARKET_DATE_FORMATTER.format(Number(market.startsAt)),
+                    timeRangeLabel: formatMarketTimeRange(market.startsAt, market.endsAt),
+                    locationName:
+                        locationNameMap.get(market.locationId) ?? 'Location to be announced',
+                    applicationWindow: buildMarketApplicationWindow(market, now),
+                    href: `/markets/${marketGroup.slug}/${market.slug}`,
+                    startsAt: Number(market.startsAt) || 0
+                }))
+                .sort((left, right) => {
+                    if (left.startsAt !== right.startsAt) {
+                        return left.startsAt - right.startsAt
+                    }
+
+                    return (
+                        left.marketName.localeCompare(right.marketName) ||
+                        left.marketId - right.marketId
+                    )
+                })
+
+            return {
+                marketGroupId: marketGroup.marketGroupId,
+                groupName: marketGroup.groupName,
+                summary:
+                    marketGroup.summary ||
+                    marketGroup.description ||
+                    'Upcoming market dates for this public market series.',
+                markets
+            }
+        })
+        .filter((marketGroup) => marketGroup.markets.length > 0)
+}
+
+function buildPublicMarketDetailCard(marketGroup, market, locations, now = Date.now()) {
+    const locationNameMap = createLocationNameMap(locations)
+
+    return {
+        marketGroupId: marketGroup.marketGroupId,
+        marketGroupName: marketGroup.groupName,
+        marketGroupSlug: marketGroup.slug,
+        marketName: market.marketName || 'Market',
+        marketSlug: market.slug || '',
+        summary: market.summary || market.description || null,
+        description: market.description || null,
+        dayLabel: MARKET_DATE_FORMATTER.format(Number(market.startsAt)),
+        timeRangeLabel: formatMarketTimeRange(market.startsAt, market.endsAt),
+        locationName: locationNameMap.get(market.locationId) ?? 'Location to be announced',
+        applicationWindow: buildMarketApplicationWindow(market, now)
+    }
+}
+
 function buildUpcomingAppliedMarketCards(applicationDetails, now = Date.now()) {
     return (Array.isArray(applicationDetails) ? applicationDetails : [])
         .flatMap((detail) =>
@@ -616,6 +751,58 @@ function buildUpcomingAppliedMarketCards(applicationDetails, now = Date.now()) {
                         selectionStatus: selection.selectionStatus || 'requested',
                         applicationStatus: detail?.application?.status || 'draft',
                         applicationHref: `/vendors/${detail?.vendorBusiness?.slug || ''}/manage/applications/${detail?.application?.vendorApplicationId}`
+                    }
+                })
+        )
+        .sort((left, right) => {
+            if (left.startsAt !== right.startsAt) {
+                return left.startsAt - right.startsAt
+            }
+
+            return (
+                left.marketName.localeCompare(right.marketName) ||
+                left.applicationMarketSelectionId - right.applicationMarketSelectionId
+            )
+        })
+}
+
+function buildPublicUpcomingVendorMarketCards(applicationDetails, locations, now = Date.now()) {
+    const locationNameMap = createLocationNameMap(locations)
+
+    return (Array.isArray(applicationDetails) ? applicationDetails : [])
+        .flatMap((detail) =>
+            (Array.isArray(detail?.selections) ? detail.selections : [])
+                .filter((selection) => {
+                    const startsAt = Number(selection?.market?.startsAt)
+
+                    return (
+                        selection?.selectionStatus === 'approved' &&
+                        detail?.application?.status !== 'withdrawn' &&
+                        selection?.market?.isPublic === 1 &&
+                        Number.isFinite(startsAt) &&
+                        startsAt >= now
+                    )
+                })
+                .map((selection) => {
+                    const startsAt = Number(selection.market.startsAt)
+
+                    return {
+                        applicationMarketSelectionId: selection.applicationMarketSelectionId,
+                        marketName: selection.market.marketName || 'Market',
+                        startsAt,
+                        dayLabel: MARKET_DATE_FORMATTER.format(startsAt),
+                        timeRangeLabel: formatMarketTimeRange(
+                            selection.market.startsAt,
+                            selection.market.endsAt
+                        ),
+                        locationName:
+                            locationNameMap.get(selection.market.locationId) ??
+                            'Location to be announced',
+                        marketGroupName: detail?.marketGroup?.groupName || 'Market Group',
+                        href:
+                            detail?.marketGroup?.slug && selection?.market?.slug
+                                ? `/markets/${detail.marketGroup.slug}/${selection.market.slug}`
+                                : null
                     }
                 })
         )
@@ -855,6 +1042,18 @@ function buildApplicationEditorViewModel(applicationMarkets, isEditable) {
                 ? 'One or more selected markets are not accepting applications at this time.'
                 : null
     }
+}
+
+function canWithdrawSubmittedApplication(applicationDetail) {
+    return (
+        applicationDetail?.application?.status === 'submitted' &&
+        Array.isArray(applicationDetail?.selections) &&
+        applicationDetail.selections.every((selection) => selection.selectionStatus === 'requested')
+    )
+}
+
+function canResubmitWithdrawnApplication(applicationDetail) {
+    return applicationDetail?.application?.status === 'withdrawn'
 }
 
 async function getApplicationFeePaymentRecord(database, applicationKey) {
@@ -1202,6 +1401,110 @@ export function createMarketOpsNewVendorsRouter(sdk, overrides = {}) {
     return router
 }
 
+export function createMarketOpsMarketsRouter(sdk, overrides = {}) {
+    const normalizedSdk = assertSdk(sdk)
+    const { createRouter, renderPage } = normalizedSdk.web
+    const { marketSetupService } = buildDependencies(normalizedSdk, overrides)
+    const router = createRouter()
+
+    router.get('/', async (req, res, next) => {
+        try {
+            const marketGroups = await marketSetupService.listMarketGroups()
+            const publicMarketGroups = marketGroups.filter(
+                (marketGroup) => marketGroup.isPublic === 1
+            )
+            const [locations, marketLists] = await Promise.all([
+                marketSetupService.listLocations(),
+                Promise.all(
+                    publicMarketGroups.map((marketGroup) =>
+                        marketSetupService.listMarketsByMarketGroupId(marketGroup.marketGroupId)
+                    )
+                )
+            ])
+
+            await renderPluginPage(req, res, renderPage, {
+                page: 'pages/markets/directory',
+                title: 'Markets',
+                locals: {
+                    marketOpsMarketsDirectoryPageData: {
+                        flash: resolveNotice(req.query),
+                        marketGroupCards: buildPublicMarketDirectoryCards(
+                            publicMarketGroups,
+                            new Map(
+                                publicMarketGroups.map((marketGroup, index) => [
+                                    marketGroup.marketGroupId,
+                                    marketLists[index]
+                                ])
+                            ),
+                            locations
+                        )
+                    }
+                }
+            })
+        } catch (err) {
+            next(err)
+        }
+    })
+
+    router.get('/:marketGroupSlug/:marketSlug', async (req, res, next) => {
+        try {
+            const marketGroupSlug = normalizeTrimmedString(
+                req?.params?.marketGroupSlug
+            ).toLowerCase()
+            const marketSlug = normalizeTrimmedString(req?.params?.marketSlug).toLowerCase()
+            const marketGroups = await marketSetupService.listMarketGroups()
+            const marketGroup = marketGroups.find(
+                (entry) => entry?.isPublic === 1 && entry?.slug?.toLowerCase() === marketGroupSlug
+            )
+
+            if (!marketGroup) {
+                await renderNotFound(
+                    req,
+                    res,
+                    renderPage,
+                    'Market Not Found',
+                    'That market page is unavailable.'
+                )
+                return
+            }
+
+            const [locations, markets] = await Promise.all([
+                marketSetupService.listLocations(),
+                marketSetupService.listMarketsByMarketGroupId(marketGroup.marketGroupId)
+            ])
+            const market = markets.find(
+                (entry) => entry?.isPublic === 1 && entry?.slug?.toLowerCase() === marketSlug
+            )
+
+            if (!market) {
+                await renderNotFound(
+                    req,
+                    res,
+                    renderPage,
+                    'Market Not Found',
+                    'That market page is unavailable.'
+                )
+                return
+            }
+
+            await renderPluginPage(req, res, renderPage, {
+                page: 'pages/markets/market',
+                title: market.marketName || 'Market',
+                locals: {
+                    marketOpsMarketDetailPageData: {
+                        flash: resolveNotice(req.query),
+                        marketCard: buildPublicMarketDetailCard(marketGroup, market, locations)
+                    }
+                }
+            })
+        } catch (err) {
+            next(err)
+        }
+    })
+
+    return router
+}
+
 export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
     const normalizedSdk = assertSdk(sdk)
     const { createRouter, renderPage, guards } = normalizedSdk.web
@@ -1224,7 +1527,8 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                 locals: {
                     marketOpsVendorDirectoryPageData: {
                         flash: resolveNotice(req.query),
-                        vendorCards: buildVendorDirectoryCards(approvedDetails)
+                        vendorCards: buildVendorDirectoryCards(approvedDetails),
+                        categoryOptions: buildVendorDirectoryCategoryOptions(approvedDetails)
                     }
                 }
             })
@@ -1668,10 +1972,15 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                             formAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}`,
                             submitAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/submit`,
                             withdrawAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/withdraw`,
+                            resubmitAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/resubmit`,
                             applicationMarkets: editorViewModel.applicationMarkets,
                             isEditable: applicationDetail.application.status === 'draft',
                             canSubmitApplication: editorViewModel.canSubmitApplication,
-                            submitBlockedMessage: editorViewModel.submitBlockedMessage
+                            submitBlockedMessage: editorViewModel.submitBlockedMessage,
+                            canResubmitApplication:
+                                canResubmitWithdrawnApplication(applicationDetail),
+                            canWithdrawApplication:
+                                canWithdrawSubmittedApplication(applicationDetail)
                         }
                     }
                 })
@@ -1828,10 +2137,15 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                                 formAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}`,
                                 submitAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/submit`,
                                 withdrawAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/withdraw`,
+                                resubmitAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/resubmit`,
                                 applicationMarkets: editorViewModel.applicationMarkets,
                                 isEditable: applicationDetail.application.status === 'draft',
                                 canSubmitApplication: editorViewModel.canSubmitApplication,
-                                submitBlockedMessage: editorViewModel.submitBlockedMessage
+                                submitBlockedMessage: editorViewModel.submitBlockedMessage,
+                                canResubmitApplication:
+                                    canResubmitWithdrawnApplication(applicationDetail),
+                                canWithdrawApplication:
+                                    canWithdrawSubmittedApplication(applicationDetail)
                             }
                         }
                     })
@@ -1968,10 +2282,15 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                                 formAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}`,
                                 submitAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/submit`,
                                 withdrawAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/withdraw`,
+                                resubmitAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/resubmit`,
                                 applicationMarkets: editorViewModel.applicationMarkets,
                                 isEditable: applicationDetail.application.status === 'draft',
                                 canSubmitApplication: editorViewModel.canSubmitApplication,
-                                submitBlockedMessage: editorViewModel.submitBlockedMessage
+                                submitBlockedMessage: editorViewModel.submitBlockedMessage,
+                                canResubmitApplication:
+                                    canResubmitWithdrawnApplication(applicationDetail),
+                                canWithdrawApplication:
+                                    canWithdrawSubmittedApplication(applicationDetail)
                             }
                         }
                     })
@@ -2039,7 +2358,226 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                     `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}?notice=application-withdrawn`
                 )
             } catch (err) {
-                next(err)
+                if (!isRecoverableVendorRouteError(err)) {
+                    next(err)
+                    return
+                }
+
+                try {
+                    const applicationDetail =
+                        await applicationService.getVendorMarketApplicationDetailById(
+                            vendorApplicationId
+                        )
+                    const marketGroupMarkets = await marketSetupService.listMarketsByMarketGroupId(
+                        applicationDetail.application.marketGroupId
+                    )
+                    const boothOfferingLists = await Promise.all(
+                        marketGroupMarkets.map((market) =>
+                            marketSetupService.listMarketBoothOfferingsByMarketId(market.marketId)
+                        )
+                    )
+                    const boothOfferingsByMarketId = new Map(
+                        marketGroupMarkets.map((market, index) => [
+                            market.marketId,
+                            boothOfferingLists[index].filter((offering) => offering.isActive === 1)
+                        ])
+                    )
+
+                    const editorViewModel = buildApplicationEditorViewModel(
+                        buildApplicationEditorMarkets(
+                            marketGroupMarkets,
+                            boothOfferingsByMarketId,
+                            buildApplicationFormStateFromDetail(applicationDetail)
+                        ),
+                        applicationDetail.application.status === 'draft'
+                    )
+
+                    await renderPluginPage(req, res, renderPage, {
+                        page: 'pages/vendors/application-editor',
+                        title: applicationDetail.marketGroup?.groupName ?? 'Vendor Application',
+                        statusCode: err.statusCode ?? 400,
+                        locals: {
+                            marketOpsVendorApplicationEditor: {
+                                flash: {
+                                    type: 'danger',
+                                    message:
+                                        err?.code ===
+                                        'VENDOR_MARKET_APPLICATION_REVIEW_ALREADY_STARTED'
+                                            ? 'This application has already been reviewed and can no longer be withdrawn online.'
+                                            : getErrorMessage(
+                                                  err,
+                                                  'We could not withdraw that application.'
+                                              )
+                                },
+                                vendorDetail: detail,
+                                applicationDetail,
+                                feeTotalLabel: formatCurrencyFromCents(
+                                    applicationDetail.application.feeTotalCents
+                                ),
+                                paymentRecord: await getApplicationFeePaymentRecord(
+                                    database,
+                                    applicationDetail.application.applicationKey
+                                ),
+                                formAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}`,
+                                submitAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/submit`,
+                                withdrawAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/withdraw`,
+                                resubmitAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/resubmit`,
+                                applicationMarkets: editorViewModel.applicationMarkets,
+                                isEditable: applicationDetail.application.status === 'draft',
+                                canSubmitApplication: editorViewModel.canSubmitApplication,
+                                submitBlockedMessage: editorViewModel.submitBlockedMessage,
+                                canResubmitApplication:
+                                    canResubmitWithdrawnApplication(applicationDetail),
+                                canWithdrawApplication:
+                                    canWithdrawSubmittedApplication(applicationDetail)
+                            }
+                        }
+                    })
+                } catch (renderErr) {
+                    next(renderErr)
+                }
+            }
+        }
+    )
+
+    router.post(
+        '/:vendorSlug/manage/applications/:vendorApplicationId/resubmit',
+        requireAuth,
+        async (req, res, next) => {
+            const detail = await requireVendorBusinessOwnerOrAdmin(
+                req,
+                res,
+                next,
+                renderPage,
+                vendorBusinessService,
+                req?.params?.vendorSlug
+            )
+
+            if (!detail) {
+                return
+            }
+
+            const vendorApplicationId = resolveRouteId(req?.params?.vendorApplicationId)
+
+            if (!vendorApplicationId) {
+                await renderNotFound(
+                    req,
+                    res,
+                    renderPage,
+                    'Application Not Found',
+                    'That application could not be found.'
+                )
+                return
+            }
+
+            try {
+                const resubmittedDetail = await applicationService.resubmitVendorMarketApplication(
+                    vendorApplicationId,
+                    {
+                        submittedByUserId: req?.user?.user_id ?? null,
+                        updatedByUserId: req?.user?.user_id ?? null
+                    }
+                )
+
+                if (
+                    resubmittedDetail.application.vendorBusinessId !==
+                    detail.vendorBusiness.vendorBusinessId
+                ) {
+                    await renderNotFound(
+                        req,
+                        res,
+                        renderPage,
+                        'Application Not Found',
+                        'That application does not belong to this vendor business.'
+                    )
+                    return
+                }
+
+                await ensureApplicationFeePaymentRecord(
+                    database,
+                    resubmittedDetail,
+                    req?.user?.user_id ?? null
+                )
+
+                res.redirect(
+                    303,
+                    `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}?notice=application-resubmitted`
+                )
+            } catch (err) {
+                if (!isRecoverableVendorRouteError(err)) {
+                    next(err)
+                    return
+                }
+
+                try {
+                    const applicationDetail =
+                        await applicationService.getVendorMarketApplicationDetailById(
+                            vendorApplicationId
+                        )
+                    const marketGroupMarkets = await marketSetupService.listMarketsByMarketGroupId(
+                        applicationDetail.application.marketGroupId
+                    )
+                    const boothOfferingLists = await Promise.all(
+                        marketGroupMarkets.map((market) =>
+                            marketSetupService.listMarketBoothOfferingsByMarketId(market.marketId)
+                        )
+                    )
+                    const boothOfferingsByMarketId = new Map(
+                        marketGroupMarkets.map((market, index) => [
+                            market.marketId,
+                            boothOfferingLists[index].filter((offering) => offering.isActive === 1)
+                        ])
+                    )
+
+                    const editorViewModel = buildApplicationEditorViewModel(
+                        buildApplicationEditorMarkets(
+                            marketGroupMarkets,
+                            boothOfferingsByMarketId,
+                            buildApplicationFormStateFromDetail(applicationDetail)
+                        ),
+                        applicationDetail.application.status === 'draft'
+                    )
+
+                    await renderPluginPage(req, res, renderPage, {
+                        page: 'pages/vendors/application-editor',
+                        title: applicationDetail.marketGroup?.groupName ?? 'Vendor Application',
+                        statusCode: err.statusCode ?? 400,
+                        locals: {
+                            marketOpsVendorApplicationEditor: {
+                                flash: {
+                                    type: 'danger',
+                                    message: getErrorMessage(
+                                        err,
+                                        'We could not resubmit that application.'
+                                    )
+                                },
+                                vendorDetail: detail,
+                                applicationDetail,
+                                feeTotalLabel: formatCurrencyFromCents(
+                                    applicationDetail.application.feeTotalCents
+                                ),
+                                paymentRecord: await getApplicationFeePaymentRecord(
+                                    database,
+                                    applicationDetail.application.applicationKey
+                                ),
+                                formAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}`,
+                                submitAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/submit`,
+                                withdrawAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/withdraw`,
+                                resubmitAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/resubmit`,
+                                applicationMarkets: editorViewModel.applicationMarkets,
+                                isEditable: applicationDetail.application.status === 'draft',
+                                canSubmitApplication: editorViewModel.canSubmitApplication,
+                                submitBlockedMessage: editorViewModel.submitBlockedMessage,
+                                canResubmitApplication:
+                                    canResubmitWithdrawnApplication(applicationDetail),
+                                canWithdrawApplication:
+                                    canWithdrawSubmittedApplication(applicationDetail)
+                            }
+                        }
+                    })
+                } catch (renderErr) {
+                    next(renderErr)
+                }
             }
         }
     )
@@ -2065,6 +2603,19 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
             const currentUserId = req?.user?.user_id ?? null
             const canManageVendorBusiness =
                 isAdminUser(req) || detail.owners.some((owner) => owner.userId === currentUserId)
+            const [bareApplications, locations] = await Promise.all([
+                applicationService.listVendorMarketApplicationsByVendorBusinessId(
+                    detail.vendorBusiness.vendorBusinessId
+                ),
+                marketSetupService.listLocations()
+            ])
+            const applicationDetails = await Promise.all(
+                bareApplications.map((application) =>
+                    applicationService.getVendorMarketApplicationDetailById(
+                        application.vendorApplicationId
+                    )
+                )
+            )
 
             await renderPluginPage(req, res, renderPage, {
                 page: 'pages/vendors/profile',
@@ -2072,7 +2623,11 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                 locals: {
                     marketOpsVendorProfilePageData: {
                         vendorDetail: detail,
-                        canManageVendorBusiness
+                        canManageVendorBusiness,
+                        upcomingMarkets: buildPublicUpcomingVendorMarketCards(
+                            applicationDetails,
+                            locations
+                        )
                     }
                 }
             })
