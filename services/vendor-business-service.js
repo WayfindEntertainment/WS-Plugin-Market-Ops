@@ -30,7 +30,7 @@ import {
  * Normalize one vendor business product-category assignment list.
  *
  * @param {unknown} input - Candidate assignment list.
- * @returns {Array<{ vendorProductCategoryId: number, isPrimary: 0|1 }>} Normalized assignments.
+ * @returns {Array<{ vendorProductCategoryId: number }>} Normalized assignments.
  */
 function normalizeProductCategoryAssignments(input) {
     const assignments = assertArray(
@@ -48,12 +48,9 @@ function normalizeProductCategoryAssignments(input) {
             `productCategories[${index}].vendorProductCategoryId`,
             'INVALID_VENDOR_PRODUCT_CATEGORY_ID'
         )
-        const isPrimary =
-            normalizedAssignment.isPrimary === true || normalizedAssignment.isPrimary === 1 ? 1 : 0
 
         return {
-            vendorProductCategoryId,
-            isPrimary
+            vendorProductCategoryId
         }
     })
 
@@ -62,13 +59,6 @@ function normalizeProductCategoryAssignments(input) {
         'productCategories',
         'DUPLICATE_VENDOR_BUSINESS_PRODUCT_CATEGORY_IDS'
     )
-
-    if (assignments.filter((assignment) => assignment.isPrimary === 1).length > 1) {
-        throw createServiceError(
-            'MULTIPLE_PRIMARY_VENDOR_BUSINESS_PRODUCT_CATEGORIES',
-            'At most one vendor business product category may be marked primary'
-        )
-    }
 
     return assignments
 }
@@ -88,7 +78,7 @@ function normalizeProductCategoryAssignments(input) {
  *   productCategoryAssignments: Array<{
  *     vendorBusinessId: number,
  *     vendorProductCategoryId: number,
- *     isPrimary: number,
+ *     sortOrder: number,
  *     category: Awaited<ReturnType<typeof getVendorProductCategoryById>>|null
  *   }>
  * }} Enriched detail object.
@@ -239,7 +229,7 @@ export function createMarketOpsVendorBusinessService(database, overrides = {}) {
      * Assert that all referenced product category ids currently exist.
      *
      * @param {{ query: (sql: string, params?: unknown[]) => Promise<unknown> }} queryable - Query seam.
-     * @param {Array<{ vendorProductCategoryId: number, isPrimary: 0|1 }>} assignments - Product category assignments.
+     * @param {Array<{ vendorProductCategoryId: number }>} assignments - Product category assignments.
      * @returns {Promise<void>}
      */
     async function requireCategoryIds(queryable, assignments) {
@@ -265,7 +255,7 @@ export function createMarketOpsVendorBusinessService(database, overrides = {}) {
      *
      * @param {{ query: (sql: string, params?: unknown[]) => Promise<unknown> }} queryable - Query seam.
      * @param {number} vendorBusinessId - Vendor business id.
-     * @param {Array<{ vendorProductCategoryId: number, isPrimary: 0|1 }>} assignments - Product category assignments.
+     * @param {Array<{ vendorProductCategoryId: number }>} assignments - Product category assignments.
      * @returns {Promise<void>}
      */
     async function writeVendorBusinessProductCategories(queryable, vendorBusinessId, assignments) {
@@ -274,11 +264,11 @@ export function createMarketOpsVendorBusinessService(database, overrides = {}) {
             vendorBusinessId
         )
 
-        for (const assignment of assignments) {
+        for (const [sortOrder, assignment] of assignments.entries()) {
             await dependencies.insertVendorBusinessProductCategory(queryable, {
                 vendorBusinessId,
                 vendorProductCategoryId: assignment.vendorProductCategoryId,
-                isPrimary: assignment.isPrimary
+                sortOrder
             })
         }
     }

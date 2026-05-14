@@ -4,12 +4,26 @@
     const application = detail.application || {}
     const vendorBusiness = detail.vendorBusiness || {}
     const marketGroup = detail.marketGroup || {}
-    const selectionDecisionCards = Array.isArray(pageData.selectionDecisionCards) ? pageData.selectionDecisionCards : []
+    const selectionDecisionCards = Array.isArray(pageData.selectionDecisionCards)
+        ? pageData.selectionDecisionCards
+        : []
+    const submittedAtLabel =
+        typeof application.submittedAt === 'number'
+            ? new Intl.DateTimeFormat('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit'
+              }).format(application.submittedAt)
+            : 'Not submitted yet'
 %>
 
 <div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3 mb-4">
     <div>
-        <a class="text-decoration-none small d-inline-block mb-2" href="/market-ops/applications">Back to Applications</a>
+        <a class="text-decoration-none small d-inline-block mb-2" href="/market-ops/applications"
+            >Back to Applications</a
+        >
         <h1 class="h3 mb-2">Application #<%= application.vendorApplicationId || '' %></h1>
         <p class="text-body-secondary mb-0">
             Review the vendor submission and decide each selected market independently.
@@ -25,18 +39,29 @@
         <div class="card">
             <div class="card-header">
                 <h2 class="h5 mb-1">Application Context</h2>
-                <p class="text-body-secondary small mb-0">The parent application and vendor record driving the market-level decisions below.</p>
+                <p class="text-body-secondary small mb-0">
+                    The parent application and vendor record driving the market-level decisions
+                    below.
+                </p>
             </div>
             <div class="card-body">
                 <dl class="row mb-0">
                     <dt class="col-sm-3">Vendor</dt>
-                    <dd class="col-sm-9"><%= vendorBusiness.businessName || 'Vendor Business' %></dd>
+                    <dd class="col-sm-9">
+                        <% if (vendorBusiness.slug) { %>
+                            <a class="text-decoration-none" href="/vendors/<%= vendorBusiness.slug %>/manage">
+                                <%= vendorBusiness.businessName || 'Vendor Business' %>
+                            </a>
+                        <% } else { %>
+                            <%= vendorBusiness.businessName || 'Vendor Business' %>
+                        <% } %>
+                    </dd>
                     <dt class="col-sm-3">Market Group</dt>
                     <dd class="col-sm-9"><%= marketGroup.groupName || 'Market Group' %></dd>
                     <dt class="col-sm-3">Application Key</dt>
                     <dd class="col-sm-9"><%= application.applicationKey || '—' %></dd>
-                    <dt class="col-sm-3">Fee Snapshot</dt>
-                    <dd class="col-sm-9"><%= application.feeModeSnapshot || 'none' %> · $<%= ((application.feeTotalCents || 0) / 100).toFixed(2) %></dd>
+                    <dt class="col-sm-3">Submitted At</dt>
+                    <dd class="col-sm-9"><%= submittedAtLabel %></dd>
                 </dl>
             </div>
         </div>
@@ -48,21 +73,46 @@
         <%
             const selection = selectionCard.selection || {}
             const market = selection.market || {}
-            const boothPreferences = Array.isArray(selection.boothPreferences) ? selection.boothPreferences : []
-            const boothOfferingOptions = Array.isArray(selectionCard.boothOfferingOptions) ? selectionCard.boothOfferingOptions : []
+            const boothPreferences = Array.isArray(selection.boothPreferences)
+                ? selection.boothPreferences
+                : []
+            const boothOfferingOptions = Array.isArray(selectionCard.boothOfferingOptions)
+                ? selectionCard.boothOfferingOptions
+                : []
             const formValues = selectionCard.formValues || {}
+            const selectionStatus = selection.selectionStatus || 'requested'
+            const selectionStatusBadgeClass =
+                selectionStatus === 'approved'
+                    ? 'text-bg-success'
+                    : selectionStatus === 'waitlisted'
+                      ? 'text-bg-secondary'
+                      : selectionStatus === 'rejected'
+                        ? 'text-bg-danger'
+                        : selectionStatus === 'withdrawn'
+                          ? 'text-bg-dark'
+                          : 'text-bg-light border'
+            const canApprove = selectionStatus !== 'approved'
+            const canWaitlist = selectionStatus !== 'waitlisted'
+            const canReject = selectionStatus !== 'rejected'
+            const canWithdraw = selectionStatus !== 'withdrawn'
         %>
         <div class="card">
             <div class="card-header">
-                <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-2">
+                <div
+                    class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-2"
+                >
                     <div>
-                        <h2 class="h5 mb-1"><%= market.marketName || `Market #${selection.marketId}` %></h2>
+                        <h2 class="h5 mb-1">
+                            <%= market.marketName || `Market #${selection.marketId}` %>
+                        </h2>
                         <div class="small text-body-secondary">
                             Requested booths: <%= selection.requestedBoothQuantity %>
                             <% if (selection.willingToVolunteer === 1) { %> · Willing to volunteer<% } %>
                         </div>
                     </div>
-                    <span class="badge text-bg-light border text-uppercase"><%= selection.selectionStatus || 'requested' %></span>
+                    <span class="badge <%= selectionStatusBadgeClass %> text-uppercase"
+                        ><%= selectionStatus %></span
+                    >
                 </div>
             </div>
             <div class="card-body">
@@ -82,18 +132,34 @@
                     </div>
                 <% } %>
 
-                <div class="row g-3 mb-4">
-                    <div class="col-12 col-xl-6">
-                        <form action="/market-ops/applications/<%= application.vendorApplicationId %>/selections/<%= selection.applicationMarketSelectionId %>/approve" method="post" class="d-flex flex-column gap-3 border rounded p-3 h-100">
-                            <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
-                            <div class="fw-semibold">Approve</div>
-                            <div>
-                                <label class="form-label" for="assigned-offering-<%= selection.applicationMarketSelectionId %>">Assigned Booth Offering</label>
-                                <select id="assigned-offering-<%= selection.applicationMarketSelectionId %>" class="form-select" name="assignedMarketBoothOfferingId" required>
+                <form
+                    method="post"
+                    class="border rounded p-3 d-flex flex-column gap-3"
+                    data-application-review-approval-form
+                >
+                    <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                    <div class="fw-semibold">Selection Decision</div>
+
+                    <% if (canApprove) { %>
+                        <div class="row g-3">
+                            <div class="col-12 col-lg-9">
+                                <label
+                                    class="form-label"
+                                    for="assigned-offering-<%= selection.applicationMarketSelectionId %>"
+                                    >Assigned Booth Offering</label
+                                >
+                                <select
+                                    id="assigned-offering-<%= selection.applicationMarketSelectionId %>"
+                                    class="form-select"
+                                    name="assignedMarketBoothOfferingId"
+                                    required
+                                    data-application-review-offering
+                                >
                                     <option value="">Choose a booth</option>
                                     <% boothOfferingOptions.forEach((option) => { %>
                                         <option
                                             value="<%= option.marketBoothOfferingId %>"
+                                            data-price-cents="<%= option.priceCents || 0 %>"
                                             <%= formValues.assignedMarketBoothOfferingId === String(option.marketBoothOfferingId) ? 'selected' : '' %>
                                         >
                                             Booth <%= option.boothNumber %> · <%= option.priceLabel %>
@@ -101,50 +167,106 @@
                                     <% }) %>
                                 </select>
                             </div>
-                            <div class="row g-3">
-                                <div class="col-12 col-md-6">
-                                    <label class="form-label" for="assigned-quantity-<%= selection.applicationMarketSelectionId %>">Assigned Quantity</label>
-                                    <input id="assigned-quantity-<%= selection.applicationMarketSelectionId %>" class="form-control" type="number" min="1" name="assignedBoothQuantity" value="<%= formValues.assignedBoothQuantity || '1' %>" required />
-                                </div>
-                                <div class="col-12 col-md-6">
-                                    <label class="form-label" for="booth-fee-total-<%= selection.applicationMarketSelectionId %>">Booth Fee Total (USD)</label>
-                                    <input id="booth-fee-total-<%= selection.applicationMarketSelectionId %>" class="form-control" type="text" name="boothFeeTotalDollars" value="<%= formValues.boothFeeTotalDollars || '0.00' %>" required />
-                                </div>
+                            <div class="col-12 col-sm-4 col-lg-3">
+                                <label
+                                    class="form-label"
+                                    for="assigned-quantity-<%= selection.applicationMarketSelectionId %>"
+                                    >Quantity</label
+                                >
+                                <input
+                                    id="assigned-quantity-<%= selection.applicationMarketSelectionId %>"
+                                    class="form-control"
+                                    type="number"
+                                    min="1"
+                                    inputmode="numeric"
+                                    name="assignedBoothQuantity"
+                                    value="<%= formValues.assignedBoothQuantity || '1' %>"
+                                    data-application-review-quantity
+                                    required
+                                />
                             </div>
-                            <div>
-                                <label class="form-label" for="approve-notes-<%= selection.applicationMarketSelectionId %>">Decision Notes</label>
-                                <textarea id="approve-notes-<%= selection.applicationMarketSelectionId %>" class="form-control" rows="3" name="decisionNotes"><%= formValues.decisionNotes || '' %></textarea>
+                            <div class="col-12 col-sm-8 col-lg-4 col-xl-2">
+                                <label
+                                    class="form-label"
+                                    for="booth-fee-total-<%= selection.applicationMarketSelectionId %>"
+                                    >Final Booth Fee (USD)</label
+                                >
+                                <input
+                                    id="booth-fee-total-<%= selection.applicationMarketSelectionId %>"
+                                    class="form-control"
+                                    type="text"
+                                    name="boothFeeTotalDollars"
+                                    value="<%= formValues.boothFeeTotalDollars || '0.00' %>"
+                                    data-application-review-fee
+                                    required
+                                />
                             </div>
-                            <button class="btn btn-success" type="submit">Approve Selection</button>
-                        </form>
-                    </div>
-
-                    <div class="col-12 col-xl-6">
-                        <div class="d-flex flex-column gap-3 h-100">
-                            <form action="/market-ops/applications/<%= application.vendorApplicationId %>/selections/<%= selection.applicationMarketSelectionId %>/waitlist" method="post" class="border rounded p-3 d-flex flex-column gap-3">
-                                <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
-                                <div class="fw-semibold">Waitlist</div>
-                                <textarea class="form-control" rows="3" name="decisionNotes" placeholder="Optional decision notes"><%= selection.decisionNotes || '' %></textarea>
-                                <button class="btn btn-outline-secondary" type="submit">Waitlist Selection</button>
-                            </form>
-
-                            <form action="/market-ops/applications/<%= application.vendorApplicationId %>/selections/<%= selection.applicationMarketSelectionId %>/reject" method="post" class="border rounded p-3 d-flex flex-column gap-3">
-                                <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
-                                <div class="fw-semibold">Reject</div>
-                                <textarea class="form-control" rows="3" name="decisionNotes" placeholder="Optional decision notes"><%= selection.decisionNotes || '' %></textarea>
-                                <button class="btn btn-outline-danger" type="submit">Reject Selection</button>
-                            </form>
-
-                            <form action="/market-ops/applications/<%= application.vendorApplicationId %>/selections/<%= selection.applicationMarketSelectionId %>/withdraw" method="post" class="border rounded p-3 d-flex flex-column gap-3">
-                                <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
-                                <div class="fw-semibold">Withdraw</div>
-                                <textarea class="form-control" rows="3" name="decisionNotes" placeholder="Optional decision notes"><%= selection.decisionNotes || '' %></textarea>
-                                <button class="btn btn-outline-dark" type="submit">Withdraw Selection</button>
-                            </form>
+                            <div class="form-text col-12 col-md-8 col-lg-12">
+                                Auto-filled from booth price x quantity. Adjust if you need to
+                                apply a discount or custom total.
+                            </div>
                         </div>
+                    <% } %>
+
+                    <div>
+                        <label
+                            class="form-label"
+                            for="decision-notes-<%= selection.applicationMarketSelectionId %>"
+                            >Notes</label
+                        >
+                        <textarea
+                            id="decision-notes-<%= selection.applicationMarketSelectionId %>"
+                            class="form-control"
+                            rows="3"
+                            name="decisionNotes"
+                        ><%= formValues.decisionNotes || '' %></textarea>
                     </div>
-                </div>
+
+                    <div class="d-flex flex-wrap gap-2">
+                        <% if (canApprove) { %>
+                            <button
+                                class="btn btn-success"
+                                type="submit"
+                                formaction="/market-ops/applications/<%= application.vendorApplicationId %>/selections/<%= selection.applicationMarketSelectionId %>/approve"
+                            >
+                                Approve
+                            </button>
+                        <% } %>
+                        <% if (canWaitlist) { %>
+                            <button
+                                class="btn btn-outline-secondary"
+                                type="submit"
+                                formnovalidate
+                                formaction="/market-ops/applications/<%= application.vendorApplicationId %>/selections/<%= selection.applicationMarketSelectionId %>/waitlist"
+                            >
+                                Waitlist
+                            </button>
+                        <% } %>
+                        <% if (canReject) { %>
+                            <button
+                                class="btn btn-outline-danger"
+                                type="submit"
+                                formnovalidate
+                                formaction="/market-ops/applications/<%= application.vendorApplicationId %>/selections/<%= selection.applicationMarketSelectionId %>/reject"
+                            >
+                                Reject
+                            </button>
+                        <% } %>
+                        <% if (canWithdraw) { %>
+                            <button
+                                class="btn btn-outline-dark"
+                                type="submit"
+                                formnovalidate
+                                formaction="/market-ops/applications/<%= application.vendorApplicationId %>/selections/<%= selection.applicationMarketSelectionId %>/withdraw"
+                            >
+                                Withdraw
+                            </button>
+                        <% } %>
+                    </div>
+                </form>
             </div>
         </div>
     <% }) %>
 </section>
+
+<script src="/plugin-assets/ws_plugin_market_ops/scripts/application-review.js"></script>

@@ -7,6 +7,8 @@
     const marketGroup = detail.marketGroup || {}
     const applicationMarkets = Array.isArray(editor.applicationMarkets) ? editor.applicationMarkets : []
     const paymentRecord = editor.paymentRecord || null
+    const canSubmitApplication = editor.canSubmitApplication === true
+    const submitBlockedMessage = editor.submitBlockedMessage || ''
 %>
 
 <div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3 mb-4">
@@ -50,10 +52,18 @@
                                     />
                                     <span class="fw-semibold"><%= market.marketName %></span>
                                 </label>
-                                <span class="small text-body-secondary">
-                                    <%= market.summary || market.locationName || 'Market opportunity' %>
-                                </span>
+                                <div class="d-flex flex-column align-items-end gap-1">
+                                    <span class="small text-body-secondary text-end">
+                                        <%= market.summary || market.locationName || 'Market opportunity' %>
+                                    </span>
+                                    <span class="badge <%= marketCard.applicationWindow?.badgeClass || 'text-bg-secondary' %>">
+                                        <%= marketCard.applicationWindow?.badgeLabel || 'Closed' %>
+                                    </span>
+                                </div>
                             </div>
+                            <p class="small text-body-secondary mb-0">
+                                <%= marketCard.applicationWindow?.message || 'Applications are not open at this time.' %>
+                            </p>
                             <div class="row g-3">
                                 <div class="col-12 col-md-4">
                                     <label class="form-label" for="requested-booth-quantity-<%= market.marketId %>">Requested Booth Quantity</label>
@@ -147,9 +157,14 @@
                     <p class="text-body-secondary small mb-0">Submission freezes the draft and creates the application-fee handoff when a fee is due.</p>
                 </div>
                 <div class="card-body">
+                    <% if (submitBlockedMessage) { %>
+                        <p class="text-body-secondary small mb-3"><%= submitBlockedMessage %></p>
+                    <% } %>
                     <form action="<%= editor.submitAction %>" method="post" class="d-grid">
                         <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
-                        <button class="btn btn-success" type="submit">Submit Application</button>
+                        <button class="btn btn-success" type="submit" <%= canSubmitApplication ? '' : 'disabled' %>>
+                            Submit Application
+                        </button>
                     </form>
                 </div>
             </div>

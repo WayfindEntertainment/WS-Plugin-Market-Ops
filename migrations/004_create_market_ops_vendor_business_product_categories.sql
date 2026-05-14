@@ -4,10 +4,15 @@
 CREATE TABLE market_ops_vendor_business_product_categories (
     vendor_business_id INT UNSIGNED NOT NULL,
     vendor_product_category_id INT UNSIGNED NOT NULL,
-    is_primary TINYINT(1) NOT NULL DEFAULT 0,
+    sort_order INT UNSIGNED NOT NULL DEFAULT 0,
 
     PRIMARY KEY (vendor_business_id, vendor_product_category_id),
     KEY idx_market_ops_vendor_business_product_categories_category (vendor_product_category_id),
+    KEY idx_market_ops_vendor_business_product_categories_order (
+        vendor_business_id,
+        sort_order,
+        vendor_product_category_id
+    ),
     CONSTRAINT fk_market_ops_vendor_business_product_categories_vendor_business
         FOREIGN KEY (vendor_business_id)
         REFERENCES market_ops_vendor_businesses(vendor_business_id)

@@ -583,6 +583,7 @@ export function createMarketOpsReviewRouter(sdk, overrides = {}) {
                                 .map((offering) => ({
                                     marketBoothOfferingId: offering.marketBoothOfferingId,
                                     boothNumber: offering.boothNumber,
+                                    priceCents: offering.priceCents,
                                     priceLabel: formatCurrencyFromCents(offering.priceCents)
                                 })),
                             formValues: buildSelectionDecisionFormValues(selection)
@@ -691,6 +692,7 @@ export function createMarketOpsReviewRouter(sdk, overrides = {}) {
                                                 marketBoothOfferingId:
                                                     offering.marketBoothOfferingId,
                                                 boothNumber: offering.boothNumber,
+                                                priceCents: offering.priceCents,
                                                 priceLabel: formatCurrencyFromCents(
                                                     offering.priceCents
                                                 )

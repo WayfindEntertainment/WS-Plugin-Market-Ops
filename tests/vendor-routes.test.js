@@ -117,7 +117,26 @@ describe('createMarketOpsVendorsRouter', () => {
                         approvalStatus: 'approved',
                         summary: 'Approved summary'
                     },
-                    productCategoryAssignments: [],
+                    productCategoryAssignments: [
+                        {
+                            vendorBusinessId: 1,
+                            vendorProductCategoryId: 8,
+                            sortOrder: 0,
+                            category: {
+                                vendorProductCategoryId: 8,
+                                label: 'Coffee Beans'
+                            }
+                        },
+                        {
+                            vendorBusinessId: 1,
+                            vendorProductCategoryId: 3,
+                            sortOrder: 1,
+                            category: {
+                                vendorProductCategoryId: 3,
+                                label: 'Stickers'
+                            }
+                        }
+                    ],
                     owners: []
                 },
                 {
@@ -162,6 +181,50 @@ describe('createMarketOpsVendorsRouter', () => {
         const vendorCards =
             renderPage.mock.calls[0][2].locals.marketOpsVendorDirectoryPageData.vendorCards
         expect(vendorCards).toHaveLength(1)
+        expect(vendorCards[0].primaryCategoryLabel).toBe('Coffee Beans')
+        expect(vendorCards[0].categoryLabels).toEqual(['Coffee Beans', 'Stickers'])
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('new vendor creation preserves selected category order', async () => {
+        const router = createRouterRecorder()
+        const sdk = createSdk(router)
+        const vendorBusinessService = {
+            createVendorBusiness: jest.fn(async () => ({
+                vendorBusiness: {
+                    slug: 'approved-shop'
+                }
+            }))
+        }
+
+        createMarketOpsNewVendorsRouter(sdk, { vendorBusinessService })
+
+        const route = router.records.post.find((entry) => entry.path === '/')
+        const req = {
+            body: {
+                slug: 'approved-shop',
+                businessName: 'Approved Shop',
+                productCategoryIds: ['8', '3', '5']
+            },
+            user: { user_id: 12, permissions: [] }
+        }
+        const res = {
+            status: jest.fn().mockReturnThis(),
+            redirect: jest.fn()
+        }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(vendorBusinessService.createVendorBusiness).toHaveBeenCalledWith(
+            expect.objectContaining({
+                productCategories: [
+                    { vendorProductCategoryId: 8 },
+                    { vendorProductCategoryId: 3 },
+                    { vendorProductCategoryId: 5 }
+                ]
+            })
+        )
         expect(next).not.toHaveBeenCalled()
     })
 
@@ -296,6 +359,173 @@ describe('createMarketOpsVendorsRouter', () => {
         expect(next).not.toHaveBeenCalled()
     })
 
+    test('application editor blocks submit when a selected market is outside its application window', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const database = {
+            query: jest.fn(async () => [[]]),
+            withTransaction: jest.fn()
+        }
+        const sdk = createSdk(router, renderPage, database)
+        const vendorBusinessService = {
+            listVendorBusinessDetails: jest.fn(async () => [
+                {
+                    vendorBusiness: {
+                        vendorBusinessId: 3,
+                        slug: 'approved-shop',
+                        businessName: 'Approved Shop',
+                        approvalStatus: 'approved'
+                    },
+                    owners: [{ userId: 12 }],
+                    productCategoryAssignments: []
+                }
+            ])
+        }
+        const applicationService = {
+            getVendorMarketApplicationDetailById: jest.fn(async () => ({
+                application: {
+                    vendorApplicationId: 7,
+                    vendorBusinessId: 3,
+                    marketGroupId: 6,
+                    status: 'draft',
+                    feeTotalCents: 2500,
+                    applicationKey: '01APPKEYTESTVALUE0000000001'
+                },
+                marketGroup: {
+                    marketGroupId: 6,
+                    groupName: 'Holiday Makers Market'
+                },
+                vendorBusiness: {
+                    slug: 'approved-shop'
+                },
+                selections: [
+                    {
+                        applicationMarketSelectionId: 88,
+                        marketId: 12,
+                        requestedBoothQuantity: 1,
+                        willingToVolunteer: 0,
+                        boothPreferences: []
+                    }
+                ]
+            }))
+        }
+        const futureOpenAt = Date.now() + 7 * 24 * 60 * 60 * 1000
+        const marketSetupService = {
+            listMarketsByMarketGroupId: jest.fn(async () => [
+                {
+                    marketId: 12,
+                    marketName: 'November 2026 Holiday Market',
+                    summary: 'Indoor early holiday shopping event.',
+                    applicationsOpen: 1,
+                    applicationsOpenAt: futureOpenAt,
+                    applicationsCloseAt: futureOpenAt + 7 * 24 * 60 * 60 * 1000
+                }
+            ]),
+            listMarketBoothOfferingsByMarketId: jest.fn(async () => [])
+        }
+
+        createMarketOpsVendorsRouter(sdk, {
+            vendorBusinessService,
+            applicationService,
+            marketSetupService
+        })
+
+        const route = router.records.get.find(
+            (entry) => entry.path === '/:vendorSlug/manage/applications/:vendorApplicationId'
+        )
+        const req = {
+            params: {
+                vendorSlug: 'approved-shop',
+                vendorApplicationId: '7'
+            },
+            query: {},
+            user: { user_id: 12, permissions: [] }
+        }
+        const res = { status: jest.fn().mockReturnThis() }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        const editor = renderPage.mock.calls[0][2].locals.marketOpsVendorApplicationEditor
+
+        expect(editor.canSubmitApplication).toBe(false)
+        expect(editor.submitBlockedMessage).toBe(
+            'One or more selected markets are not accepting applications at this time.'
+        )
+        expect(editor.applicationMarkets[0].applicationWindow.badgeLabel).toBe('Opens Later')
+        expect(editor.applicationMarkets[0].applicationWindow.message).toContain(
+            'Applications are open between'
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('manage save preserves reordered category ids', async () => {
+        const router = createRouterRecorder()
+        const sdk = createSdk(router)
+        const vendorDetail = {
+            vendorBusiness: {
+                vendorBusinessId: 3,
+                slug: 'approved-shop',
+                businessName: 'Approved Shop',
+                approvalStatus: 'approved'
+            },
+            owners: [{ userId: 12 }],
+            productCategoryAssignments: [
+                {
+                    vendorBusinessId: 3,
+                    vendorProductCategoryId: 2,
+                    sortOrder: 0,
+                    category: {
+                        vendorProductCategoryId: 2,
+                        label: 'Art Prints',
+                        isActive: 1
+                    }
+                }
+            ]
+        }
+        const vendorBusinessService = {
+            listVendorBusinessDetails: jest.fn(async () => [vendorDetail]),
+            updateVendorBusiness: jest.fn(async () => vendorDetail)
+        }
+
+        createMarketOpsVendorsRouter(sdk, {
+            vendorBusinessService,
+            applicationService: {
+                listVendorMarketApplicationsByVendorBusinessId: jest.fn(async () => [])
+            }
+        })
+
+        const route = router.records.post.find((entry) => entry.path === '/:vendorSlug/manage')
+        const req = {
+            params: { vendorSlug: 'approved-shop' },
+            body: {
+                slug: 'approved-shop',
+                businessName: 'Approved Shop',
+                productCategoryIds: ['8', '3', '2']
+            },
+            user: { user_id: 12, permissions: [] }
+        }
+        const res = {
+            status: jest.fn().mockReturnThis(),
+            redirect: jest.fn()
+        }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(vendorBusinessService.updateVendorBusiness).toHaveBeenCalledWith(
+            3,
+            expect.objectContaining({
+                productCategories: [
+                    { vendorProductCategoryId: 8 },
+                    { vendorProductCategoryId: 3 },
+                    { vendorProductCategoryId: 2 }
+                ]
+            })
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
     test('submit route creates the pending payment-record handoff when a fee is due', async () => {
         const router = createRouterRecorder()
         const database = {
@@ -307,8 +537,8 @@ describe('createMarketOpsVendorsRouter', () => {
                     [
                         {
                             payment_record_id: 9,
-                            provider_code: 'stripe',
-                            method_code: 'checkout',
+                            provider_code: 'cash',
+                            method_code: 'cash',
                             status_code: 'pending',
                             amount_minor: 2500,
                             currency_code: 'USD',

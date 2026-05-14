@@ -87,17 +87,19 @@
                 <div class="card-body">
                     <form action="<%= pageData.formAction %>" method="post" class="row g-3">
                         <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
-                        <div class="col-12 col-md-6">
+                        <input type="hidden" name="slug" value="<%= formValues.slug || '' %>" />
+                        <div class="col-12">
                             <label class="form-label" for="vendor-business-name">Business Name</label>
                             <input id="vendor-business-name" class="form-control" type="text" name="businessName" value="<%= formValues.businessName || '' %>" maxlength="255" required />
+                            <div class="form-text">This is the public name shoppers will see.</div>
                         </div>
-                        <div class="col-12 col-md-6">
-                            <label class="form-label" for="vendor-slug">Slug</label>
-                            <input id="vendor-slug" class="form-control" type="text" name="slug" value="<%= formValues.slug || '' %>" maxlength="128" required />
+                        <div class="col-12 pt-2">
+                            <div class="small fw-semibold text-uppercase text-body-secondary">Optional Details</div>
                         </div>
                         <div class="col-12 col-md-6">
                             <label class="form-label" for="vendor-legal-name">Legal Name</label>
                             <input id="vendor-legal-name" class="form-control" type="text" name="legalName" value="<%= formValues.legalName || '' %>" maxlength="255" />
+                            <div class="form-text">Use your registered business or LLC name if it is different from your public business name.</div>
                         </div>
                         <div class="col-12 col-md-6">
                             <label class="form-label" for="vendor-email">Public Email</label>
@@ -120,10 +122,7 @@
                             <textarea id="vendor-description" class="form-control" rows="5" name="description"><%= formValues.description || '' %></textarea>
                         </div>
                         <div class="col-12">
-                            <div class="d-flex align-items-center justify-content-between gap-3 mb-2">
-                                <label class="form-label mb-0">Product Categories</label>
-                                <span class="small text-body-secondary">Optional</span>
-                            </div>
+                            <label class="form-label mb-2">Product Categories</label>
                             <% if (categoryOptions.length === 0) { %>
                                 <div class="text-body-secondary small border rounded p-3">
                                     No product categories are available yet. You can still create your business now and add categories later.
@@ -131,28 +130,16 @@
                             <% } else { %>
                                 <div class="d-flex flex-column gap-2">
                                     <% categoryOptions.forEach((category) => { %>
-                                        <label class="border rounded p-3 d-flex flex-column gap-2">
-                                            <span class="d-flex align-items-center justify-content-between gap-3">
-                                                <span class="d-flex align-items-center gap-2">
-                                                    <input
-                                                        class="form-check-input mt-0"
-                                                        type="checkbox"
-                                                        name="productCategoryIds"
-                                                        value="<%= category.vendorProductCategoryId %>"
-                                                        <%= category.isSelected ? 'checked' : '' %>
-                                                    />
-                                                    <span class="fw-semibold"><%= category.label %></span>
-                                                </span>
-                                                <span class="d-flex align-items-center gap-2 small text-body-secondary">
-                                                    <input
-                                                        class="form-check-input mt-0"
-                                                        type="radio"
-                                                        name="primaryCategoryId"
-                                                        value="<%= category.vendorProductCategoryId %>"
-                                                        <%= category.isPrimary ? 'checked' : '' %>
-                                                    />
-                                                    Primary
-                                                </span>
+                                    <label class="border rounded p-3 d-flex flex-column gap-2">
+                                            <span class="d-flex align-items-center gap-2">
+                                                <input
+                                                    class="form-check-input mt-0"
+                                                    type="checkbox"
+                                                    name="productCategoryIds"
+                                                    value="<%= category.vendorProductCategoryId %>"
+                                                    <%= category.isSelected ? 'checked' : '' %>
+                                                />
+                                                <span class="fw-semibold"><%= category.label %></span>
                                             </span>
                                             <% if (category.description) { %>
                                                 <span class="small text-body-secondary"><%= category.description %></span>

@@ -115,12 +115,12 @@ describe('catalog-storage', () => {
                               {
                                   vendor_business_id: 9,
                                   vendor_product_category_id: 1,
-                                  is_primary: 1
+                                  sort_order: 0
                               },
                               {
                                   vendor_business_id: 9,
                                   vendor_product_category_id: 2,
-                                  is_primary: 0
+                                  sort_order: 1
                               }
                           ],
                           undefined
@@ -134,19 +134,23 @@ describe('catalog-storage', () => {
             insertVendorBusinessProductCategory(queryable, {
                 vendorBusinessId: 9,
                 vendorProductCategoryId: 1,
-                isPrimary: true
+                sortOrder: 0
             })
         ).resolves.toEqual({
             vendorBusinessId: 9,
             vendorProductCategoryId: 1,
-            isPrimary: 1
+            sortOrder: 0
         })
         await expect(
             listVendorBusinessProductCategoriesByVendorBusinessId(queryable, 9)
         ).resolves.toEqual([
-            { vendorBusinessId: 9, vendorProductCategoryId: 1, isPrimary: 1 },
-            { vendorBusinessId: 9, vendorProductCategoryId: 2, isPrimary: 0 }
+            { vendorBusinessId: 9, vendorProductCategoryId: 1, sortOrder: 0 },
+            { vendorBusinessId: 9, vendorProductCategoryId: 2, sortOrder: 1 }
         ])
+        expect(queryable.query).toHaveBeenCalledWith(
+            expect.stringContaining('ORDER BY sort_order ASC, vendor_product_category_id ASC'),
+            [9]
+        )
         await expect(
             deleteVendorBusinessProductCategoriesByVendorBusinessId(queryable, 9)
         ).resolves.toBeUndefined()

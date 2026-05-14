@@ -49,13 +49,13 @@ function mapVendorProductCategoryRow(row) {
  * Convert one vendor business product category row into the public storage shape.
  *
  * @param {Record<string, unknown>} row - Raw vendor business product category row.
- * @returns {{ vendorBusinessId: number, vendorProductCategoryId: number, isPrimary: number }} Normalized join row.
+ * @returns {{ vendorBusinessId: number, vendorProductCategoryId: number, sortOrder: number }} Normalized join row.
  */
 function mapVendorBusinessProductCategoryRow(row) {
     return {
         vendorBusinessId: Number(row.vendor_business_id),
         vendorProductCategoryId: Number(row.vendor_product_category_id),
-        isPrimary: Number(row.is_primary)
+        sortOrder: Number(row.sort_order)
     }
 }
 
@@ -508,7 +508,7 @@ export async function updateVendorProductCategoryById(queryable, vendorProductCa
  * Insert one vendor business to product category association row.
  *
  * @param {{ query: (sql: string, params?: unknown[]) => Promise<unknown> }} queryable - Query seam.
- * @param {{ vendorBusinessId: number, vendorProductCategoryId: number, isPrimary?: unknown }} input - Association payload.
+ * @param {{ vendorBusinessId: number, vendorProductCategoryId: number, sortOrder?: unknown }} input - Association payload.
  * @returns {Promise<ReturnType<typeof mapVendorBusinessProductCategoryRow>>} Created association.
  */
 export async function insertVendorBusinessProductCategory(queryable, input) {
@@ -528,30 +528,24 @@ export async function insertVendorBusinessProductCategory(queryable, input) {
         'vendorProductCategoryId',
         'INVALID_VENDOR_BUSINESS_PRODUCT_CATEGORY_CATEGORY_ID'
     )
-    const isPrimary =
-        typeof normalizedInput.isPrimary === 'undefined'
-            ? 0
-            : normalizeBooleanFlag(
-                  normalizedInput.isPrimary,
-                  'isPrimary',
-                  'INVALID_VENDOR_BUSINESS_PRODUCT_CATEGORY_IS_PRIMARY'
-              )
+    const sortOrder =
+        typeof normalizedInput.sortOrder === 'undefined' ? 0 : Number(normalizedInput.sortOrder)
 
     await normalizedQueryable.query(
         `
         INSERT INTO market_ops_vendor_business_product_categories (
             vendor_business_id,
             vendor_product_category_id,
-            is_primary
+            sort_order
         ) VALUES (?, ?, ?)
         `,
-        [vendorBusinessId, vendorProductCategoryId, isPrimary]
+        [vendorBusinessId, vendorProductCategoryId, sortOrder]
     )
 
     return {
         vendorBusinessId,
         vendorProductCategoryId,
-        isPrimary
+        sortOrder
     }
 }
 
@@ -577,10 +571,10 @@ export async function listVendorBusinessProductCategoriesByVendorBusinessId(
         SELECT
             vendor_business_id,
             vendor_product_category_id,
-            is_primary
+            sort_order
         FROM market_ops_vendor_business_product_categories
         WHERE vendor_business_id = ?
-        ORDER BY is_primary DESC, vendor_product_category_id ASC
+        ORDER BY sort_order ASC, vendor_product_category_id ASC
         `,
         [normalizedVendorBusinessId]
     )

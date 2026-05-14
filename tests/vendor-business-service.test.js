@@ -79,12 +79,12 @@ describe('createMarketOpsVendorBusinessService', () => {
                 {
                     vendorBusinessId: 41,
                     vendorProductCategoryId: 3,
-                    isPrimary: 1
+                    sortOrder: 0
                 },
                 {
                     vendorBusinessId: 41,
                     vendorProductCategoryId: 8,
-                    isPrimary: 0
+                    sortOrder: 1
                 }
             ]),
             deleteVendorBusinessProductCategoriesByVendorBusinessId: jest.fn(async () => undefined)
@@ -99,10 +99,7 @@ describe('createMarketOpsVendorBusinessService', () => {
                     createdByUserId: 7
                 },
                 ownerUserId: 7,
-                productCategories: [
-                    { vendorProductCategoryId: 3, isPrimary: 1 },
-                    { vendorProductCategoryId: 8, isPrimary: 0 }
-                ]
+                productCategories: [{ vendorProductCategoryId: 3 }, { vendorProductCategoryId: 8 }]
             })
         ).resolves.toEqual({
             vendorBusiness,
@@ -115,12 +112,12 @@ describe('createMarketOpsVendorBusinessService', () => {
             productCategoryAssignments: [
                 expect.objectContaining({
                     vendorProductCategoryId: 3,
-                    isPrimary: 1,
+                    sortOrder: 0,
                     category: expect.objectContaining({ label: 'Coffee Beans' })
                 }),
                 expect.objectContaining({
                     vendorProductCategoryId: 8,
-                    isPrimary: 0,
+                    sortOrder: 1,
                     category: expect.objectContaining({ label: 'Stickers' })
                 })
             ]
@@ -134,6 +131,58 @@ describe('createMarketOpsVendorBusinessService', () => {
             })
         )
         expect(dependencies.insertVendorBusinessProductCategory).toHaveBeenCalledTimes(2)
+        expect(dependencies.insertVendorBusinessProductCategory).toHaveBeenNthCalledWith(
+            1,
+            expect.any(Object),
+            expect.objectContaining({
+                vendorBusinessId: 41,
+                vendorProductCategoryId: 3,
+                sortOrder: 0
+            })
+        )
+        expect(dependencies.insertVendorBusinessProductCategory).toHaveBeenNthCalledWith(
+            2,
+            expect.any(Object),
+            expect.objectContaining({
+                vendorBusinessId: 41,
+                vendorProductCategoryId: 8,
+                sortOrder: 1
+            })
+        )
+    })
+
+    test('rejects duplicate vendor product category ids', async () => {
+        const database = createDatabase()
+        const service = createMarketOpsVendorBusinessService(database, {
+            insertVendorBusiness: jest.fn(),
+            getVendorBusinessById: jest.fn(),
+            listVendorBusinesses: jest.fn(),
+            updateVendorBusinessById: jest.fn(),
+            insertVendorBusinessOwner: jest.fn(),
+            listVendorBusinessOwnersByVendorBusinessId: jest.fn(async () => []),
+            listVendorBusinessOwnershipsByUserId: jest.fn(),
+            deleteVendorBusinessOwner: jest.fn(),
+            getVendorProductCategoryById: jest.fn(),
+            insertVendorBusinessProductCategory: jest.fn(),
+            listVendorBusinessProductCategoriesByVendorBusinessId: jest.fn(async () => []),
+            deleteVendorBusinessProductCategoriesByVendorBusinessId: jest.fn()
+        })
+
+        await expect(
+            service.createVendorBusiness({
+                vendorBusiness: {
+                    slug: 'coffee-beans',
+                    businessName: 'Coffee Beans',
+                    createdByUserId: 7
+                },
+                ownerUserId: 7,
+                productCategories: [{ vendorProductCategoryId: 3 }, { vendorProductCategoryId: 3 }]
+            })
+        ).rejects.toEqual(
+            expect.objectContaining({
+                code: 'DUPLICATE_VENDOR_BUSINESS_PRODUCT_CATEGORY_IDS'
+            })
+        )
     })
 
     test('approves one vendor business and clears rejection fields', async () => {

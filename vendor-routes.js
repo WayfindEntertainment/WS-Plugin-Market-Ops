@@ -97,6 +97,14 @@ function normalizeOptionalString(value) {
     return normalizedValue.length > 0 ? normalizedValue : null
 }
 
+function slugifyVendorBusinessName(value) {
+    return String(value ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+}
+
 function encodeUlidBase32(value, length) {
     let remainingValue = Math.max(0, Number(value) || 0)
     let encodedValue = ''
@@ -196,6 +204,10 @@ function formatCurrencyFromCents(cents) {
     const normalizedCents = Number.isFinite(Number(cents)) ? Number(cents) : 0
 
     return USD_CURRENCY_FORMATTER.format(normalizedCents / 100)
+}
+
+function formatMarketDateTime(timestamp) {
+    return `${MARKET_DATE_FORMATTER.format(timestamp)} at ${MARKET_TIME_FORMATTER.format(timestamp)}`
 }
 
 function resolveNotice(query = {}) {
@@ -298,25 +310,30 @@ function buildVendorBusinessFormValues(source = {}) {
             : typeof source.productCategoryIds === 'string' &&
                 source.productCategoryIds.trim().length > 0
               ? [source.productCategoryIds.trim()]
-              : [],
-        primaryCategoryId: normalizeTrimmedString(source.primaryCategoryId)
+              : []
     }
 }
 
 function buildVendorBusinessInputFromFormValues(formValues, actorUserId, existingRecord = null) {
+    const businessName = normalizeRequiredBoundedStringField(
+        formValues.businessName,
+        'Business name',
+        255,
+        'INVALID_VENDOR_BUSINESS_NAME'
+    )
+    const derivedSlug =
+        existingRecord == null && normalizeTrimmedString(formValues.slug).length === 0
+            ? slugifyVendorBusinessName(businessName)
+            : formValues.slug
+
     return {
         slug: normalizeRequiredBoundedStringField(
-            formValues.slug,
+            derivedSlug,
             'Slug',
             128,
             'INVALID_VENDOR_BUSINESS_SLUG'
         ),
-        businessName: normalizeRequiredBoundedStringField(
-            formValues.businessName,
-            'Business name',
-            255,
-            'INVALID_VENDOR_BUSINESS_NAME'
-        ),
+        businessName,
         legalName: normalizeOptionalBoundedStringField(
             formValues.legalName,
             'Legal name',
@@ -358,15 +375,13 @@ function buildProductCategoryAssignments(formValues) {
               )
           )
         : []
-    const primaryCategoryId = normalizeTrimmedString(formValues.primaryCategoryId)
 
     return selectedIds.map((value) => ({
         vendorProductCategoryId: normalizePositiveIntegerField(
             value,
             'Product category',
             'INVALID_VENDOR_PRODUCT_CATEGORY_ID'
-        ),
-        isPrimary: primaryCategoryId === value ? 1 : 0
+        )
     }))
 }
 
@@ -455,38 +470,70 @@ function buildVendorDirectoryCards(details) {
             detail.vendorBusiness.summary ||
             detail.vendorBusiness.description ||
             'Vendor profile coming soon.',
-        primaryCategoryLabel:
-            detail.productCategoryAssignments.find((assignment) => assignment.isPrimary === 1)
-                ?.category?.label ??
-            detail.productCategoryAssignments[0]?.category?.label ??
-            null,
+        primaryCategoryLabel: detail.productCategoryAssignments[0]?.category?.label ?? null,
         categoryLabels: detail.productCategoryAssignments
             .map((assignment) => assignment.category?.label)
             .filter(Boolean)
     }))
 }
 
-function buildVendorManageCategoryOptions(categories, detail, formValues) {
-    const assignedIds =
-        formValues && Array.isArray(formValues.productCategoryIds)
-            ? new Set(formValues.productCategoryIds)
-            : new Set(
-                  detail.productCategoryAssignments.map((assignment) =>
-                      String(assignment.vendorProductCategoryId)
-                  )
-              )
-    const primaryId =
-        normalizeTrimmedString(formValues?.primaryCategoryId) ||
-        String(
-            detail.productCategoryAssignments.find((assignment) => assignment.isPrimary === 1)
-                ?.vendorProductCategoryId ?? ''
-        )
+function buildVendorCreateCategoryOptions(categories, formValues) {
+    const selectedIds = new Set(
+        Array.isArray(formValues?.productCategoryIds)
+            ? formValues.productCategoryIds.map((value) => normalizeTrimmedString(value))
+            : []
+    )
 
-    return categories.map((category) => ({
-        ...category,
-        isSelected: assignedIds.has(String(category.vendorProductCategoryId)),
-        isPrimary: primaryId === String(category.vendorProductCategoryId)
-    }))
+    return categories
+        .filter((category) => category.isActive === 1)
+        .map((category) => ({
+            ...category,
+            isSelected: selectedIds.has(String(category.vendorProductCategoryId))
+        }))
+}
+
+function buildVendorManageCategoryState(categories, detail, formValues) {
+    const selectedIds = Array.isArray(formValues?.productCategoryIds)
+        ? Array.from(
+              new Set(formValues.productCategoryIds.map((value) => normalizeTrimmedString(value)))
+          ).filter(Boolean)
+        : detail.productCategoryAssignments.map((assignment) =>
+              String(assignment.vendorProductCategoryId)
+          )
+    const selectedIdSet = new Set(selectedIds)
+    const categoriesById = new Map(
+        (Array.isArray(categories) ? categories : []).map((category) => [
+            String(category.vendorProductCategoryId),
+            category
+        ])
+    )
+    const selectedCategories = selectedIds
+        .map((categoryId, index) => {
+            const matchingCategory =
+                categoriesById.get(categoryId) ??
+                detail.productCategoryAssignments.find(
+                    (assignment) => String(assignment.vendorProductCategoryId) === categoryId
+                )?.category
+
+            if (!matchingCategory) {
+                return null
+            }
+
+            return {
+                ...matchingCategory,
+                isPrimary: index === 0
+            }
+        })
+        .filter(Boolean)
+    const availableCategories = (Array.isArray(categories) ? categories : []).filter(
+        (category) =>
+            category.isActive === 1 && !selectedIdSet.has(String(category.vendorProductCategoryId))
+    )
+
+    return {
+        selectedCategories,
+        availableCategories
+    }
 }
 
 function buildVendorApplicationSummary(detail, paymentRecord) {
@@ -687,17 +734,94 @@ function buildApplicationFormStateFromDetail(detail) {
     }
 }
 
-function buildApplicationEditorMarkets(markets, boothOfferingsByMarketId, formState) {
+function isMarketAcceptingApplications(market, now = Date.now()) {
+    if (market?.applicationsOpen !== 1) {
+        return false
+    }
+
+    if (typeof market?.applicationsOpenAt === 'number' && now < market.applicationsOpenAt) {
+        return false
+    }
+
+    if (typeof market?.applicationsCloseAt === 'number' && now > market.applicationsCloseAt) {
+        return false
+    }
+
+    return true
+}
+
+function buildMarketApplicationWindow(market, now = Date.now()) {
+    if (market?.applicationsOpen !== 1) {
+        return {
+            isOpen: false,
+            badgeClass: 'text-bg-secondary',
+            badgeLabel: 'Closed',
+            message: 'Applications are not open at this time.'
+        }
+    }
+
+    if (typeof market?.applicationsOpenAt === 'number' && now < market.applicationsOpenAt) {
+        const openLabel = formatMarketDateTime(market.applicationsOpenAt)
+        const closeLabel =
+            typeof market?.applicationsCloseAt === 'number'
+                ? formatMarketDateTime(market.applicationsCloseAt)
+                : null
+
+        return {
+            isOpen: false,
+            badgeClass: 'text-bg-secondary',
+            badgeLabel: 'Opens Later',
+            message: closeLabel
+                ? `Applications are open between ${openLabel} and ${closeLabel}.`
+                : `Applications open at ${openLabel}.`
+        }
+    }
+
+    if (typeof market?.applicationsCloseAt === 'number' && now > market.applicationsCloseAt) {
+        return {
+            isOpen: false,
+            badgeClass: 'text-bg-secondary',
+            badgeLabel: 'Closed',
+            message: 'Applications are not open at this time.'
+        }
+    }
+
+    if (typeof market?.applicationsCloseAt === 'number') {
+        return {
+            isOpen: true,
+            badgeClass: 'text-bg-success',
+            badgeLabel: 'Open',
+            message: `Applications close at ${formatMarketDateTime(market.applicationsCloseAt)}.`
+        }
+    }
+
+    return {
+        isOpen: true,
+        badgeClass: 'text-bg-success',
+        badgeLabel: 'Open',
+        message: 'Applications are open now.'
+    }
+}
+
+function buildApplicationEditorMarkets(
+    markets,
+    boothOfferingsByMarketId,
+    formState,
+    now = Date.now()
+) {
     const selectedIds = new Set(formState.selectedMarketIds ?? [])
 
     return markets.map((market) => {
         const marketId = String(market.marketId)
         const selectedPreferenceIds = formState.boothPreferenceIdsByMarketId?.[marketId] ?? []
         const boothOfferings = boothOfferingsByMarketId.get(market.marketId) ?? []
+        const applicationWindow = buildMarketApplicationWindow(market, now)
 
         return {
             market,
             isSelected: selectedIds.has(marketId),
+            isAcceptingApplications: isMarketAcceptingApplications(market, now),
+            applicationWindow,
             requestedBoothQuantity: formState.requestedBoothQuantities?.[marketId] ?? '1',
             willingToVolunteer: (formState.willingToVolunteer?.[marketId] ?? '0') === '1',
             boothOfferings,
@@ -707,6 +831,30 @@ function buildApplicationEditorMarkets(markets, boothOfferingsByMarketId, formSt
             }))
         }
     })
+}
+
+function buildApplicationEditorViewModel(applicationMarkets, isEditable) {
+    const selectedApplicationMarkets = applicationMarkets.filter(
+        (marketCard) => marketCard.isSelected
+    )
+    const hasSelectedMarkets = selectedApplicationMarkets.length > 0
+    const hasUnavailableSelectedMarkets = selectedApplicationMarkets.some(
+        (marketCard) => !marketCard.isAcceptingApplications
+    )
+
+    return {
+        applicationMarkets,
+        canSubmitApplication: Boolean(
+            isEditable && hasSelectedMarkets && !hasUnavailableSelectedMarkets
+        ),
+        submitBlockedMessage: !isEditable
+            ? null
+            : !hasSelectedMarkets
+              ? 'Select at least one market before submitting.'
+              : hasUnavailableSelectedMarkets
+                ? 'One or more selected markets are not accepting applications at this time.'
+                : null
+    }
 }
 
 async function getApplicationFeePaymentRecord(database, applicationKey) {
@@ -861,8 +1009,8 @@ async function ensureApplicationFeePaymentRecord(database, applicationDetail, ac
                 'ws_plugin_market_ops',
                 'vendor_application_fee',
                 applicationDetail.application.applicationKey,
-                'stripe',
-                'checkout',
+                'cash',
+                'cash',
                 'pending',
                 applicationDetail.application.feeTotalCents,
                 'USD',
@@ -973,9 +1121,8 @@ export function createMarketOpsNewVendorsRouter(sdk, overrides = {}) {
                         isAuthenticated: Boolean(req.user),
                         formAction: '/new-vendors',
                         formValues: buildVendorBusinessFormValues(),
-                        categoryOptions: buildVendorManageCategoryOptions(
+                        categoryOptions: buildVendorCreateCategoryOptions(
                             categoryOptions,
-                            { productCategoryAssignments: [] },
                             buildVendorBusinessFormValues()
                         ),
                         ownedBusinesses,
@@ -1032,9 +1179,8 @@ export function createMarketOpsNewVendorsRouter(sdk, overrides = {}) {
                             isAuthenticated: Boolean(req.user),
                             formAction: '/new-vendors',
                             formValues,
-                            categoryOptions: buildVendorManageCategoryOptions(
+                            categoryOptions: buildVendorCreateCategoryOptions(
                                 categoryOptions,
-                                { productCategoryAssignments: [] },
                                 formValues
                             ),
                             ownedBusinesses:
@@ -1102,8 +1248,8 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
         }
 
         try {
-            const [categoryOptions, sidebarData] = await Promise.all([
-                listActiveVendorProductCategoryOptions(database),
+            const [allCategories, sidebarData] = await Promise.all([
+                listVendorProductCategories(database),
                 loadVendorManageSidebarData(database, applicationService, detail)
             ])
 
@@ -1122,14 +1268,9 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                             ...detail.vendorBusiness,
                             productCategoryIds: detail.productCategoryAssignments.map(
                                 (assignment) => String(assignment.vendorProductCategoryId)
-                            ),
-                            primaryCategoryId: String(
-                                detail.productCategoryAssignments.find(
-                                    (assignment) => assignment.isPrimary === 1
-                                )?.vendorProductCategoryId ?? ''
                             )
                         }),
-                        categoryOptions: buildVendorManageCategoryOptions(categoryOptions, detail)
+                        categorySelection: buildVendorManageCategoryState(allCategories, detail)
                     }
                 }
             })
@@ -1178,8 +1319,8 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
             }
 
             try {
-                const [categoryOptions, sidebarData] = await Promise.all([
-                    listActiveVendorProductCategoryOptions(database),
+                const [allCategories, sidebarData] = await Promise.all([
+                    listVendorProductCategories(database),
                     loadVendorManageSidebarData(database, applicationService, detail)
                 ])
 
@@ -1202,8 +1343,8 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                             applicationsHref: sidebarData.applicationsHref,
                             formAction: `/vendors/${detail.vendorBusiness.slug}/manage`,
                             formValues,
-                            categoryOptions: buildVendorManageCategoryOptions(
-                                categoryOptions,
+                            categorySelection: buildVendorManageCategoryState(
+                                allCategories,
                                 detail,
                                 formValues
                             )
@@ -1249,8 +1390,8 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
             }
 
             try {
-                const [categoryOptions, sidebarData] = await Promise.all([
-                    listActiveVendorProductCategoryOptions(database),
+                const [allCategories, sidebarData] = await Promise.all([
+                    listVendorProductCategories(database),
                     loadVendorManageSidebarData(database, applicationService, detail)
                 ])
 
@@ -1276,17 +1417,9 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                                 ...detail.vendorBusiness,
                                 productCategoryIds: detail.productCategoryAssignments.map(
                                     (assignment) => String(assignment.vendorProductCategoryId)
-                                ),
-                                primaryCategoryId: String(
-                                    detail.productCategoryAssignments.find(
-                                        (assignment) => assignment.isPrimary === 1
-                                    )?.vendorProductCategoryId ?? ''
                                 )
                             }),
-                            categoryOptions: buildVendorManageCategoryOptions(
-                                categoryOptions,
-                                detail
-                            )
+                            categorySelection: buildVendorManageCategoryState(allCategories, detail)
                         }
                     }
                 })
@@ -1511,6 +1644,15 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                     ])
                 )
 
+                const editorViewModel = buildApplicationEditorViewModel(
+                    buildApplicationEditorMarkets(
+                        marketGroupMarkets,
+                        boothOfferingsByMarketId,
+                        buildApplicationFormStateFromDetail(applicationDetail)
+                    ),
+                    applicationDetail.application.status === 'draft'
+                )
+
                 await renderPluginPage(req, res, renderPage, {
                     page: 'pages/vendors/application-editor',
                     title: applicationDetail.marketGroup?.groupName ?? 'Vendor Application',
@@ -1526,12 +1668,10 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                             formAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}`,
                             submitAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/submit`,
                             withdrawAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/withdraw`,
-                            applicationMarkets: buildApplicationEditorMarkets(
-                                marketGroupMarkets,
-                                boothOfferingsByMarketId,
-                                buildApplicationFormStateFromDetail(applicationDetail)
-                            ),
-                            isEditable: applicationDetail.application.status === 'draft'
+                            applicationMarkets: editorViewModel.applicationMarkets,
+                            isEditable: applicationDetail.application.status === 'draft',
+                            canSubmitApplication: editorViewModel.canSubmitApplication,
+                            submitBlockedMessage: editorViewModel.submitBlockedMessage
                         }
                     }
                 })
@@ -1654,6 +1794,15 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                         marketGroupMarkets
                     )
 
+                    const editorViewModel = buildApplicationEditorViewModel(
+                        buildApplicationEditorMarkets(
+                            marketGroupMarkets,
+                            boothOfferingsByMarketId,
+                            formState
+                        ),
+                        applicationDetail.application.status === 'draft'
+                    )
+
                     await renderPluginPage(req, res, renderPage, {
                         page: 'pages/vendors/application-editor',
                         title: applicationDetail.marketGroup?.groupName ?? 'Vendor Application',
@@ -1679,12 +1828,10 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                                 formAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}`,
                                 submitAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/submit`,
                                 withdrawAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/withdraw`,
-                                applicationMarkets: buildApplicationEditorMarkets(
-                                    marketGroupMarkets,
-                                    boothOfferingsByMarketId,
-                                    formState
-                                ),
-                                isEditable: applicationDetail.application.status === 'draft'
+                                applicationMarkets: editorViewModel.applicationMarkets,
+                                isEditable: applicationDetail.application.status === 'draft',
+                                canSubmitApplication: editorViewModel.canSubmitApplication,
+                                submitBlockedMessage: editorViewModel.submitBlockedMessage
                             }
                         }
                     })
@@ -1784,6 +1931,15 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                         ])
                     )
 
+                    const editorViewModel = buildApplicationEditorViewModel(
+                        buildApplicationEditorMarkets(
+                            marketGroupMarkets,
+                            boothOfferingsByMarketId,
+                            buildApplicationFormStateFromDetail(applicationDetail)
+                        ),
+                        applicationDetail.application.status === 'draft'
+                    )
+
                     await renderPluginPage(req, res, renderPage, {
                         page: 'pages/vendors/application-editor',
                         title: applicationDetail.marketGroup?.groupName ?? 'Vendor Application',
@@ -1792,10 +1948,13 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                             marketOpsVendorApplicationEditor: {
                                 flash: {
                                     type: 'danger',
-                                    message: getErrorMessage(
-                                        err,
-                                        'We could not submit that application.'
-                                    )
+                                    message:
+                                        err?.code === 'MARKET_APPLICATIONS_CLOSED'
+                                            ? 'Market is not accepting applications at this time.'
+                                            : getErrorMessage(
+                                                  err,
+                                                  'We could not submit that application.'
+                                              )
                                 },
                                 vendorDetail: detail,
                                 applicationDetail,
@@ -1809,12 +1968,10 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                                 formAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}`,
                                 submitAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/submit`,
                                 withdrawAction: `/vendors/${detail.vendorBusiness.slug}/manage/applications/${vendorApplicationId}/withdraw`,
-                                applicationMarkets: buildApplicationEditorMarkets(
-                                    marketGroupMarkets,
-                                    boothOfferingsByMarketId,
-                                    buildApplicationFormStateFromDetail(applicationDetail)
-                                ),
-                                isEditable: applicationDetail.application.status === 'draft'
+                                applicationMarkets: editorViewModel.applicationMarkets,
+                                isEditable: applicationDetail.application.status === 'draft',
+                                canSubmitApplication: editorViewModel.canSubmitApplication,
+                                submitBlockedMessage: editorViewModel.submitBlockedMessage
                             }
                         }
                     })

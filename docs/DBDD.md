@@ -189,18 +189,20 @@ Associates vendor businesses with one or more admin-managed product categories.
 > - This table is intentionally many-to-many because one vendor may sell multiple product types.
 > - The parent vendor business row answers: “who is this business?”
 > - This child table answers: “what categories of products does this business sell?”
-> - `is_primary` can be used to mark the vendor’s main category when needed for placement or
->   directory presentation, while still allowing additional category assignments.
+> - Category order is explicit through `sort_order`.
+> - The category with the lowest `sort_order` is treated as the vendor's primary category for
+>   directory and profile presentation.
 
 | KEY   | FIELD                      |           TYPE | REQUIRED | DEFAULT | DESCRIPTION                                                                    |
 | ----- | -------------------------- | -------------: | :------: | ------- | ------------------------------------------------------------------------------ |
 | PK/FK | vendor_business_id         | `INT UNSIGNED` |   YES    |         | References `market_ops_vendor_businesses.vendor_business_id`.                  |
 | PK/FK | vendor_product_category_id | `INT UNSIGNED` |   YES    |         | References `market_ops_vendor_product_categories.vendor_product_category_id`.  |
-|       | is_primary                 |   `TINYINT(1)` |   YES    | `0`     | Whether this category is the vendor business’s primary product-category label. |
+|       | sort_order                 | `INT UNSIGNED` |   YES    | `0`     | Explicit category order for this vendor; the lowest value is treated as primary. |
 
 **Indexes / constraints**
 
 - Composite primary key `(vendor_business_id, vendor_product_category_id)`.
+- Index on `(vendor_business_id, sort_order, vendor_product_category_id)`.
 - Index on `vendor_product_category_id`.
 - Foreign key `vendor_business_id` -> `market_ops_vendor_businesses.vendor_business_id`
   (`ON DELETE CASCADE`, `ON UPDATE RESTRICT`).
