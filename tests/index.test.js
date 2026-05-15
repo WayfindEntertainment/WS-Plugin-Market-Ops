@@ -30,42 +30,48 @@ describe('Market Ops plugin declaration', () => {
                 icon: 'shop',
                 index: 55,
                 parent: null,
-                allowChildren: true
+                allowChildren: true,
+                requiredPermissions: ['ws_plugin_market_ops.read', 'ws_plugin_market_ops.manage']
             }),
             expect.objectContaining({
                 id: 'market-ops-overview',
                 icon: 'speedometer2',
                 href: '/market-ops',
                 index: 1,
-                parent: 'plugin:ws_plugin_market_ops:market-ops'
+                parent: 'plugin:ws_plugin_market_ops:market-ops',
+                requiredPermissions: ['ws_plugin_market_ops.read', 'ws_plugin_market_ops.manage']
             }),
             expect.objectContaining({
                 id: 'market-ops-markets',
                 icon: 'calendar-week',
                 href: '/market-ops/market-groups',
                 index: 2,
-                parent: 'plugin:ws_plugin_market_ops:market-ops'
+                parent: 'plugin:ws_plugin_market_ops:market-ops',
+                requiredPermissions: ['ws_plugin_market_ops.read', 'ws_plugin_market_ops.manage']
             }),
             expect.objectContaining({
                 id: 'market-ops-vendors',
                 icon: 'shop-window',
                 href: '/market-ops/vendors',
                 index: 3,
-                parent: 'plugin:ws_plugin_market_ops:market-ops'
+                parent: 'plugin:ws_plugin_market_ops:market-ops',
+                requiredPermissions: ['ws_plugin_market_ops.read', 'ws_plugin_market_ops.manage']
             }),
             expect.objectContaining({
                 id: 'market-ops-applications',
                 icon: 'journal-text',
                 href: '/market-ops/applications',
                 index: 4,
-                parent: 'plugin:ws_plugin_market_ops:market-ops'
+                parent: 'plugin:ws_plugin_market_ops:market-ops',
+                requiredPermissions: ['ws_plugin_market_ops.read', 'ws_plugin_market_ops.manage']
             }),
             expect.objectContaining({
                 id: 'market-ops-setup',
                 icon: 'gear',
                 href: '/market-ops/setup',
                 index: 5,
-                parent: 'plugin:ws_plugin_market_ops:market-ops'
+                parent: 'plugin:ws_plugin_market_ops:market-ops',
+                requiredPermissions: ['ws_plugin_market_ops.read', 'ws_plugin_market_ops.manage']
             })
         ])
     })
@@ -98,6 +104,25 @@ describe('Market Ops plugin declaration', () => {
                     })
                 })
             })
+        )
+    })
+
+    test('declares public-view and auto-approve settings', () => {
+        expect(marketOpsPlugin.settings).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    key: 'ws_plugin_market_ops.public_vendors_enabled',
+                    control: 'boolean'
+                }),
+                expect.objectContaining({
+                    key: 'ws_plugin_market_ops.public_markets_enabled',
+                    control: 'boolean'
+                }),
+                expect.objectContaining({
+                    key: 'ws_plugin_market_ops.auto_approve_vendor_businesses',
+                    control: 'boolean'
+                })
+            ])
         )
     })
 })

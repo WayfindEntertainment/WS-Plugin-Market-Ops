@@ -4,6 +4,7 @@
     const categoryOptions = Array.isArray(pageData.categoryOptions) ? pageData.categoryOptions : []
     const ownedBusinesses = Array.isArray(pageData.ownedBusinesses) ? pageData.ownedBusinesses : []
     const hasExistingBusinesses = ownedBusinesses.length > 0
+    const publicVendorsEnabled = pageData.publicVendorsEnabled === true
 %>
 
 <link rel="stylesheet" href="/plugin-assets/ws_plugin_market_ops/styles/market-ops.css" />
@@ -17,7 +18,9 @@
             Start by creating your business profile. After it is approved, you can apply to upcoming markets from the same place.
         </p>
     </div>
-    <a class="btn btn-outline-secondary" href="/vendors">View Approved Vendors</a>
+    <% if (publicVendorsEnabled) { %>
+        <a class="btn btn-outline-secondary" href="/vendors">View Approved Vendors</a>
+    <% } %>
 </div>
 
 <%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash: pageData.flash }) %>
@@ -104,17 +107,14 @@
                             <div class="small fw-semibold text-uppercase text-body-secondary mb-1">Required</div>
                             <label class="form-label" for="vendor-business-name">Business Name</label>
                             <input id="vendor-business-name" class="form-control" type="text" name="businessName" value="<%= formValues.businessName || '' %>" maxlength="255" required />
-                            <div class="form-text">This is the public name shoppers will see.</div>
                         </div>
                         <div class="col-12">
                             <label class="form-label" for="vendor-legal-name">Owner Name (First and Last)</label>
                             <input id="vendor-legal-name" class="form-control" type="text" name="legalName" value="<%= formValues.legalName || '' %>" maxlength="255" required />
-                            <div class="form-text">Tell us the name of the person running this business.</div>
                         </div>
                         <div class="col-12">
                             <label class="form-label" for="vendor-phone">Business Phone Number</label>
                             <input id="vendor-phone" class="form-control" type="text" name="phone" value="<%= formValues.phone || '' %>" maxlength="64" required />
-                            <div class="form-text">This number may be shown to the public.</div>
                         </div>
                         <div class="col-12 pt-2">
                             <div class="small fw-semibold text-uppercase text-body-secondary">Optional Details</div>

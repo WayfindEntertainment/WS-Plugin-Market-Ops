@@ -1,6 +1,7 @@
 <%
     const pageData = marketOpsMarketsDirectoryPageData || {}
     const marketGroupCards = Array.isArray(pageData.marketGroupCards) ? pageData.marketGroupCards : []
+    const publicVendorsEnabled = pageData.publicVendorsEnabled === true
 %>
 
 <link rel="stylesheet" href="/plugin-assets/ws_plugin_market_ops/styles/market-ops.css" />
@@ -13,7 +14,9 @@
         </p>
     </div>
     <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-outline-secondary" href="/vendors">View Vendors</a>
+        <% if (publicVendorsEnabled) { %>
+            <a class="btn btn-outline-secondary" href="/vendors">View Vendors</a>
+        <% } %>
         <a class="btn btn-outline-primary" href="/new-vendors">Become a Vendor</a>
     </div>
 </div>

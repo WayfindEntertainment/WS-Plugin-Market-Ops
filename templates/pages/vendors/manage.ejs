@@ -19,6 +19,7 @@
     const restoreAction = pageData.restoreAction || `/vendors/${vendorBusiness.slug || ''}/manage/restore`
     const vendorApprovalStatus = vendorBusiness.approvalStatus || 'pending'
     const isArchived = vendorBusiness.archivedAt != null
+    const publicVendorsEnabled = pageData.publicVendorsEnabled === true
     const approvalStatusBadgeClass =
         vendorApprovalStatus === 'approved'
             ? 'text-bg-success'
@@ -37,7 +38,7 @@
             Edit your vendor business profile and keep the approval-ready details current.
         </p>
     </div>
-    <% if (vendorBusiness.slug && !isArchived) { %>
+    <% if (vendorBusiness.slug && !isArchived && publicVendorsEnabled) { %>
         <a class="btn btn-outline-primary" href="/vendors/<%= vendorBusiness.slug %>">See Public Profile</a>
     <% } %>
 </div>

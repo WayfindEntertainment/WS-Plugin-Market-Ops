@@ -1,6 +1,11 @@
 /* eslint-disable jsdoc/require-jsdoc, no-nested-ternary, prefer-destructuring */
 
 import { canManageVendorBusiness } from './permission-helpers.js'
+import {
+    isMarketOpsAutoApproveVendorBusinessesEnabled,
+    isMarketOpsPublicMarketsEnabled,
+    isMarketOpsPublicVendorsEnabled
+} from './settings-helpers.js'
 import createMarketOpsApplicationService from './services/application-service.js'
 import createMarketOpsMarketSetupService from './services/market-setup-service.js'
 import createMarketOpsVendorBusinessService from './services/vendor-business-service.js'
@@ -71,11 +76,13 @@ function assertSdk(sdk) {
         typeof sdk?.web?.createRouter !== 'function' ||
         typeof sdk?.web?.renderPage !== 'function' ||
         typeof sdk?.web?.guards?.requireAuth !== 'function' ||
-        !sdk?.services?.database
+        !sdk?.services?.database ||
+        !sdk?.services?.settings ||
+        typeof sdk.services.settings.get !== 'function'
     ) {
         throw createRouteError(
             'INVALID_MARKET_OPS_PLUGIN_SDK',
-            'Market Ops vendor routes require the plugin SDK web and database seams',
+            'Market Ops vendor routes require the plugin SDK web, database, and settings seams',
             500
         )
     }
@@ -338,6 +345,12 @@ function buildVendorBusinessFormValues(source = {}) {
               ? [source.productCategoryIds.trim()]
               : []
     }
+}
+
+function buildInitialVendorBusinessFormValues(req) {
+    return buildVendorBusinessFormValues({
+        legalName: typeof req?.user?.display_name === 'string' ? req.user.display_name : ''
+    })
 }
 
 function buildVendorBusinessInputFromFormValues(
@@ -1346,6 +1359,7 @@ async function renderVendorManagePage(
     renderPage,
     database,
     applicationService,
+    settings,
     detail,
     {
         flash = null,
@@ -1371,6 +1385,7 @@ async function renderVendorManagePage(
             marketOpsVendorManagePageData: {
                 flash,
                 vendorDetail: detail,
+                publicVendorsEnabled: isMarketOpsPublicVendorsEnabled(settings),
                 ownerProfiles: sidebarData.ownerProfiles,
                 upcomingAppliedMarkets: sidebarData.upcomingAppliedMarkets,
                 applicationsHref: sidebarData.applicationsHref,
@@ -1389,6 +1404,7 @@ function buildDependencies(sdk, overrides = {}) {
 
     return {
         database,
+        settings: overrides.settings ?? sdk.services.settings,
         vendorBusinessService:
             overrides.vendorBusinessService ?? createMarketOpsVendorBusinessService(database),
         applicationService:
@@ -1402,11 +1418,15 @@ export function createMarketOpsNewVendorsRouter(sdk, overrides = {}) {
     const normalizedSdk = assertSdk(sdk)
     const { createRouter, renderPage, guards } = normalizedSdk.web
     const { requireAuth } = guards
-    const { vendorBusinessService, database } = buildDependencies(normalizedSdk, overrides)
+    const { vendorBusinessService, database, settings } = buildDependencies(
+        normalizedSdk,
+        overrides
+    )
     const router = createRouter()
 
     router.get('/', async (req, res, next) => {
         try {
+            const initialFormValues = buildInitialVendorBusinessFormValues(req)
             const [categoryOptions, ownedBusinesses] = await Promise.all([
                 listActiveVendorProductCategoryOptions(database),
                 typeof req?.user?.user_id === 'number'
@@ -1421,11 +1441,12 @@ export function createMarketOpsNewVendorsRouter(sdk, overrides = {}) {
                     marketOpsNewVendorsPageData: {
                         flash: resolveNotice(req.query),
                         isAuthenticated: Boolean(req.user),
+                        publicVendorsEnabled: isMarketOpsPublicVendorsEnabled(settings),
                         formAction: '/new-vendors',
-                        formValues: buildVendorBusinessFormValues(),
+                        formValues: initialFormValues,
                         categoryOptions: buildVendorCreateCategoryOptions(
                             categoryOptions,
-                            buildVendorBusinessFormValues()
+                            initialFormValues
                         ),
                         ownedBusinesses,
                         helpers: {
@@ -1452,6 +1473,8 @@ export function createMarketOpsNewVendorsRouter(sdk, overrides = {}) {
                     requirePhone: true
                 }
             )
+            const autoApproveVendorBusinesses =
+                isMarketOpsAutoApproveVendorBusinessesEnabled(settings)
             let uniqueSlug = await buildUniqueVendorBusinessSlug(
                 vendorBusinessService,
                 vendorBusinessInput.slug
@@ -1463,7 +1486,13 @@ export function createMarketOpsNewVendorsRouter(sdk, overrides = {}) {
                     createdDetail = await vendorBusinessService.createVendorBusiness({
                         vendorBusiness: {
                             ...vendorBusinessInput,
-                            slug: uniqueSlug
+                            slug: uniqueSlug,
+                            approvalStatus: autoApproveVendorBusinesses ? 'approved' : 'pending',
+                            approvalNotes: null,
+                            approvedAt: autoApproveVendorBusinesses ? Date.now() : null,
+                            approvedByUserId: null,
+                            rejectedAt: null,
+                            rejectedByUserId: null
                         },
                         ownerUserId: req?.user?.user_id ?? null,
                         productCategories: buildProductCategoryAssignments(formValues)
@@ -1508,6 +1537,7 @@ export function createMarketOpsNewVendorsRouter(sdk, overrides = {}) {
                                 )
                             },
                             isAuthenticated: Boolean(req.user),
+                            publicVendorsEnabled: isMarketOpsPublicVendorsEnabled(settings),
                             formAction: '/new-vendors',
                             formValues,
                             categoryOptions: buildVendorCreateCategoryOptions(
@@ -1536,11 +1566,22 @@ export function createMarketOpsNewVendorsRouter(sdk, overrides = {}) {
 export function createMarketOpsMarketsRouter(sdk, overrides = {}) {
     const normalizedSdk = assertSdk(sdk)
     const { createRouter, renderPage } = normalizedSdk.web
-    const { marketSetupService } = buildDependencies(normalizedSdk, overrides)
+    const { marketSetupService, settings } = buildDependencies(normalizedSdk, overrides)
     const router = createRouter()
 
     router.get('/', async (req, res, next) => {
         try {
+            if (!isMarketOpsPublicMarketsEnabled(settings)) {
+                await renderNotFound(
+                    req,
+                    res,
+                    renderPage,
+                    'Markets Unavailable',
+                    'That market page is unavailable.'
+                )
+                return
+            }
+
             const marketGroups = await marketSetupService.listMarketGroups()
             const publicMarketGroups = marketGroups.filter(
                 (marketGroup) => marketGroup.isPublic === 1
@@ -1560,6 +1601,7 @@ export function createMarketOpsMarketsRouter(sdk, overrides = {}) {
                 locals: {
                     marketOpsMarketsDirectoryPageData: {
                         flash: resolveNotice(req.query),
+                        publicVendorsEnabled: isMarketOpsPublicVendorsEnabled(settings),
                         marketGroupCards: buildPublicMarketDirectoryCards(
                             publicMarketGroups,
                             new Map(
@@ -1580,6 +1622,17 @@ export function createMarketOpsMarketsRouter(sdk, overrides = {}) {
 
     router.get('/:marketGroupSlug/:marketSlug', async (req, res, next) => {
         try {
+            if (!isMarketOpsPublicMarketsEnabled(settings)) {
+                await renderNotFound(
+                    req,
+                    res,
+                    renderPage,
+                    'Markets Unavailable',
+                    'That market page is unavailable.'
+                )
+                return
+            }
+
             const marketGroupSlug = normalizeTrimmedString(
                 req?.params?.marketGroupSlug
             ).toLowerCase()
@@ -1641,12 +1694,23 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
     const normalizedSdk = assertSdk(sdk)
     const { createRouter, renderPage, guards } = normalizedSdk.web
     const { requireAuth } = guards
-    const { vendorBusinessService, applicationService, marketSetupService, database } =
+    const { vendorBusinessService, applicationService, marketSetupService, database, settings } =
         buildDependencies(normalizedSdk, overrides)
     const router = createRouter()
 
     router.get('/', async (req, res, next) => {
         try {
+            if (!isMarketOpsPublicVendorsEnabled(settings)) {
+                await renderNotFound(
+                    req,
+                    res,
+                    renderPage,
+                    'Vendors Unavailable',
+                    'That vendor page is unavailable.'
+                )
+                return
+            }
+
             const approvedDetails = sortVendorBusinessDetailsForDirectory(
                 (await vendorBusinessService.listVendorBusinessDetails()).filter(
                     (detail) =>
@@ -1692,6 +1756,7 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                 renderPage,
                 database,
                 applicationService,
+                settings,
                 detail,
                 {
                     flash: resolveNotice(req.query)
@@ -1752,6 +1817,7 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                     renderPage,
                     database,
                     applicationService,
+                    settings,
                     detail,
                     {
                         flash: {
@@ -1786,12 +1852,26 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
         }
 
         try {
-            await vendorBusinessService.resubmitVendorBusinessForApproval(
-                detail.vendorBusiness.vendorBusinessId,
-                {
-                    updatedByUserId: req?.user?.user_id ?? null
-                }
-            )
+            const autoApproveVendorBusinesses =
+                isMarketOpsAutoApproveVendorBusinessesEnabled(settings)
+
+            if (autoApproveVendorBusinesses) {
+                await vendorBusinessService.approveVendorBusiness(
+                    detail.vendorBusiness.vendorBusinessId,
+                    {
+                        approvalNotes: null,
+                        approvedByUserId: null,
+                        updatedByUserId: req?.user?.user_id ?? null
+                    }
+                )
+            } else {
+                await vendorBusinessService.resubmitVendorBusinessForApproval(
+                    detail.vendorBusiness.vendorBusinessId,
+                    {
+                        updatedByUserId: req?.user?.user_id ?? null
+                    }
+                )
+            }
 
             res.redirect(
                 303,
@@ -2775,6 +2855,17 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
 
     router.get('/:vendorSlug', async (req, res, next) => {
         try {
+            if (!isMarketOpsPublicVendorsEnabled(settings)) {
+                await renderNotFound(
+                    req,
+                    res,
+                    renderPage,
+                    'Vendors Unavailable',
+                    'That vendor profile is unavailable.'
+                )
+                return
+            }
+
             const detail = await findVendorBusinessDetailBySlug(
                 vendorBusinessService,
                 req?.params?.vendorSlug
@@ -2820,7 +2911,9 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                         upcomingMarkets: buildPublicUpcomingVendorMarketCards(
                             applicationDetails,
                             locations
-                        )
+                        ),
+                        publicVendorsEnabled: isMarketOpsPublicVendorsEnabled(settings),
+                        publicMarketsEnabled: isMarketOpsPublicMarketsEnabled(settings)
                     }
                 }
             })

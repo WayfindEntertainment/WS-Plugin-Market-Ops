@@ -34,7 +34,13 @@ function createRouterRecorder() {
     return router
 }
 
-function createSdk(router, renderPage = jest.fn(), database = null) {
+function createSdk(router, renderPage = jest.fn(), database = null, settingsOverrides = {}) {
+    const defaultSettings = {
+        'ws_plugin_market_ops.public_vendors_enabled': 'true',
+        'ws_plugin_market_ops.public_markets_enabled': 'true',
+        'ws_plugin_market_ops.auto_approve_vendor_businesses': 'false'
+    }
+
     return {
         web: {
             createRouter: () => router,
@@ -48,6 +54,13 @@ function createSdk(router, renderPage = jest.fn(), database = null) {
             database: database ?? {
                 query: jest.fn(async () => [[]]),
                 withTransaction: jest.fn()
+            },
+            settings: {
+                get: jest.fn((key) =>
+                    Object.prototype.hasOwnProperty.call(settingsOverrides, key)
+                        ? settingsOverrides[key]
+                        : (defaultSettings[key] ?? '')
+                )
             }
         }
     }
@@ -86,6 +99,38 @@ describe('createMarketOpsMarketsRouter', () => {
             '/',
             '/:marketGroupSlug/:marketSlug'
         ])
+    })
+
+    test('directory returns not-found when public markets are disabled', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage, null, {
+            'ws_plugin_market_ops.public_markets_enabled': 'false'
+        })
+
+        createMarketOpsMarketsRouter(sdk, {
+            marketSetupService: {
+                listMarketGroups: jest.fn(async () => []),
+                listLocations: jest.fn(async () => []),
+                listMarketsByMarketGroupId: jest.fn(async () => [])
+            }
+        })
+
+        const route = router.records.get.find((entry) => entry.path === '/')
+        const req = { query: {} }
+        const res = { status: jest.fn().mockReturnThis() }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(renderPage).toHaveBeenCalledWith(
+            req,
+            res,
+            expect.objectContaining({
+                page: 'pages/market-ops/not-found'
+            })
+        )
+        expect(next).not.toHaveBeenCalled()
     })
 
     test('directory renders only public groups with public markets', async () => {
@@ -188,6 +233,38 @@ describe('createMarketOpsMarketsRouter', () => {
         expect(marketGroupCards[0].markets[0].href).toBe(
             '/markets/holiday-makers-market/november-2026-holiday-market'
         )
+        expect(
+            renderPage.mock.calls[0][2].locals.marketOpsMarketsDirectoryPageData
+                .publicVendorsEnabled
+        ).toBe(true)
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('directory page data hides vendor-directory link when public vendors are disabled', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage, null, {
+            'ws_plugin_market_ops.public_vendors_enabled': 'false'
+        })
+        const marketSetupService = {
+            listMarketGroups: jest.fn(async () => []),
+            listLocations: jest.fn(async () => []),
+            listMarketsByMarketGroupId: jest.fn(async () => [])
+        }
+
+        createMarketOpsMarketsRouter(sdk, { marketSetupService })
+
+        const route = router.records.get.find((entry) => entry.path === '/')
+        const req = { query: {} }
+        const res = { status: jest.fn().mockReturnThis() }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(
+            renderPage.mock.calls[0][2].locals.marketOpsMarketsDirectoryPageData
+                .publicVendorsEnabled
+        ).toBe(false)
         expect(next).not.toHaveBeenCalled()
     })
 
@@ -304,6 +381,110 @@ describe('createMarketOpsVendorsRouter', () => {
                 '/:vendorSlug/manage/applications/:vendorApplicationId/resubmit'
             ])
         )
+    })
+
+    test('vendor business resubmit auto-approves when the setting is enabled', async () => {
+        const router = createRouterRecorder()
+        const sdk = createSdk(router, jest.fn(), null, {
+            'ws_plugin_market_ops.auto_approve_vendor_businesses': 'true'
+        })
+        const vendorBusinessService = {
+            listVendorBusinessDetails: jest.fn(async () => [
+                {
+                    vendorBusiness: {
+                        vendorBusinessId: 5,
+                        slug: 'cedar-pine-workshop',
+                        businessName: 'Cedar Pine Workshop',
+                        approvalStatus: 'rejected',
+                        archivedAt: null
+                    },
+                    owners: [{ userId: 12 }],
+                    productCategoryAssignments: []
+                }
+            ]),
+            approveVendorBusiness: jest.fn(async () => ({})),
+            resubmitVendorBusinessForApproval: jest.fn(async () => ({}))
+        }
+
+        createMarketOpsVendorsRouter(sdk, {
+            vendorBusinessService,
+            applicationService: {
+                listVendorMarketApplicationsByVendorBusinessId: jest.fn(async () => [])
+            },
+            marketSetupService: {
+                listLocations: jest.fn(async () => [])
+            }
+        })
+
+        const route = router.records.post.find(
+            (entry) => entry.path === '/:vendorSlug/manage/resubmit'
+        )
+        const req = {
+            params: { vendorSlug: 'cedar-pine-workshop' },
+            user: { user_id: 12, permissions: [] }
+        }
+        const res = {
+            status: jest.fn().mockReturnThis(),
+            redirect: jest.fn()
+        }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(vendorBusinessService.approveVendorBusiness).toHaveBeenCalledWith(
+            5,
+            expect.objectContaining({
+                approvalNotes: null,
+                approvedByUserId: null,
+                updatedByUserId: 12
+            })
+        )
+        expect(vendorBusinessService.resubmitVendorBusinessForApproval).not.toHaveBeenCalled()
+        expect(res.redirect).toHaveBeenCalledWith(
+            303,
+            '/vendors/cedar-pine-workshop/manage?notice=vendor-business-resubmitted'
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('public market detail returns not-found when public markets are disabled', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage, null, {
+            'ws_plugin_market_ops.public_markets_enabled': 'false'
+        })
+
+        createMarketOpsMarketsRouter(sdk, {
+            marketSetupService: {
+                listMarketGroups: jest.fn(async () => []),
+                listLocations: jest.fn(async () => []),
+                listMarketsByMarketGroupId: jest.fn(async () => [])
+            }
+        })
+
+        const route = router.records.get.find(
+            (entry) => entry.path === '/:marketGroupSlug/:marketSlug'
+        )
+        const req = {
+            params: {
+                marketGroupSlug: 'holiday-makers-market',
+                marketSlug: 'november-2026-holiday-market'
+            },
+            query: {}
+        }
+        const res = { status: jest.fn().mockReturnThis() }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(renderPage).toHaveBeenCalledWith(
+            req,
+            res,
+            expect.objectContaining({
+                page: 'pages/market-ops/not-found'
+            })
+        )
+        expect(next).not.toHaveBeenCalled()
     })
 
     test('directory renders approved vendors only with filter metadata and alphabetical order', async () => {
@@ -522,6 +703,50 @@ describe('createMarketOpsVendorsRouter', () => {
         expect(next).not.toHaveBeenCalled()
     })
 
+    test('new vendor creation auto-approves when the setting is enabled', async () => {
+        const router = createRouterRecorder()
+        const sdk = createSdk(router, jest.fn(), null, {
+            'ws_plugin_market_ops.auto_approve_vendor_businesses': 'true'
+        })
+        const vendorBusinessService = {
+            createVendorBusiness: jest.fn(async (input) => ({
+                vendorBusiness: {
+                    slug: input.vendorBusiness.slug
+                }
+            }))
+        }
+
+        createMarketOpsNewVendorsRouter(sdk, { vendorBusinessService })
+
+        const route = router.records.post.find((entry) => entry.path === '/')
+        const req = {
+            body: {
+                businessName: 'Approved Shop',
+                legalName: 'Scott Lassiter',
+                phone: '7139069917'
+            },
+            user: { user_id: 12, permissions: [] }
+        }
+        const res = {
+            status: jest.fn().mockReturnThis(),
+            redirect: jest.fn()
+        }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(vendorBusinessService.createVendorBusiness).toHaveBeenCalledWith(
+            expect.objectContaining({
+                vendorBusiness: expect.objectContaining({
+                    approvalStatus: 'approved',
+                    approvedAt: expect.any(Number),
+                    approvedByUserId: null
+                })
+            })
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
     test('approved public profile exposes manage CTA only to owners or users with vendor-manage access', async () => {
         const router = createRouterRecorder()
         const renderPage = jest.fn()
@@ -684,6 +909,89 @@ describe('createMarketOpsVendorsRouter', () => {
             renderPage.mock.calls[0][2].locals.marketOpsVendorProfilePageData
                 .canManageVendorBusiness
         ).toBe(true)
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('public vendor directory returns not-found when public vendors are disabled', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage, null, {
+            'ws_plugin_market_ops.public_vendors_enabled': 'false'
+        })
+
+        createMarketOpsVendorsRouter(sdk, {
+            vendorBusinessService: {
+                listVendorBusinessDetails: jest.fn(async () => [])
+            }
+        })
+
+        const route = router.records.get.find((entry) => entry.path === '/')
+        const req = { query: {} }
+        const res = { status: jest.fn().mockReturnThis() }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(renderPage).toHaveBeenCalledWith(
+            req,
+            res,
+            expect.objectContaining({
+                page: 'pages/market-ops/not-found'
+            })
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('public vendor profile returns not-found when public vendors are disabled', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage, null, {
+            'ws_plugin_market_ops.public_vendors_enabled': 'false'
+        })
+        const vendorBusinessService = {
+            listVendorBusinessDetails: jest.fn(async () => [
+                {
+                    vendorBusiness: {
+                        vendorBusinessId: 3,
+                        slug: 'approved-shop',
+                        businessName: 'Approved Shop',
+                        approvalStatus: 'approved',
+                        archivedAt: null
+                    },
+                    productCategoryAssignments: [],
+                    owners: []
+                }
+            ])
+        }
+
+        createMarketOpsVendorsRouter(sdk, {
+            vendorBusinessService,
+            applicationService: {
+                listVendorMarketApplicationsByVendorBusinessId: jest.fn(async () => []),
+                getVendorMarketApplicationDetailById: jest.fn()
+            },
+            marketSetupService: {
+                listLocations: jest.fn(async () => [])
+            }
+        })
+
+        const route = router.records.get.find((entry) => entry.path === '/:vendorSlug')
+        const req = {
+            params: { vendorSlug: 'approved-shop' },
+            query: {}
+        }
+        const res = { status: jest.fn().mockReturnThis() }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(renderPage).toHaveBeenCalledWith(
+            req,
+            res,
+            expect.objectContaining({
+                page: 'pages/market-ops/not-found'
+            })
+        )
         expect(next).not.toHaveBeenCalled()
     })
 
@@ -889,6 +1197,59 @@ describe('createMarketOpsVendorsRouter', () => {
                 })
             })
         ])
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('new-vendors page data hides the public vendors link when public vendors are disabled', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage, null, {
+            'ws_plugin_market_ops.public_vendors_enabled': 'false'
+        })
+        const vendorBusinessService = {
+            listVendorBusinessesByOwnerUserId: jest.fn(async () => [])
+        }
+
+        createMarketOpsNewVendorsRouter(sdk, { vendorBusinessService })
+
+        const route = router.records.get.find((entry) => entry.path === '/')
+        const req = { query: {}, user: { user_id: 12, permissions: [] } }
+        const res = { status: jest.fn().mockReturnThis() }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(
+            renderPage.mock.calls[0][2].locals.marketOpsNewVendorsPageData.publicVendorsEnabled
+        ).toBe(false)
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('new-vendors pre-fills owner name from the authenticated account display name', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage)
+        const vendorBusinessService = {
+            listVendorBusinessesByOwnerUserId: jest.fn(async () => [])
+        }
+
+        createMarketOpsNewVendorsRouter(sdk, { vendorBusinessService })
+
+        const route = router.records.get.find((entry) => entry.path === '/')
+        const req = {
+            query: {},
+            user: { user_id: 12, permissions: [], display_name: 'Keldy Owner' }
+        }
+        const res = { status: jest.fn().mockReturnThis() }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(renderPage.mock.calls[0][2].locals.marketOpsNewVendorsPageData.formValues).toEqual(
+            expect.objectContaining({
+                legalName: 'Keldy Owner'
+            })
+        )
         expect(next).not.toHaveBeenCalled()
     })
 

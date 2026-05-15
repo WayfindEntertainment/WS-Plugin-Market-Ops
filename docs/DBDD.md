@@ -199,10 +199,10 @@ Associates vendor businesses with one or more admin-managed product categories.
 > - The category with the lowest `sort_order` is treated as the vendor's primary category for
 >   directory and profile presentation.
 
-| KEY   | FIELD                      |           TYPE | REQUIRED | DEFAULT | DESCRIPTION                                                                    |
-| ----- | -------------------------- | -------------: | :------: | ------- | ------------------------------------------------------------------------------ |
-| PK/FK | vendor_business_id         | `INT UNSIGNED` |   YES    |         | References `market_ops_vendor_businesses.vendor_business_id`.                  |
-| PK/FK | vendor_product_category_id | `INT UNSIGNED` |   YES    |         | References `market_ops_vendor_product_categories.vendor_product_category_id`.  |
+| KEY   | FIELD                      |           TYPE | REQUIRED | DEFAULT | DESCRIPTION                                                                      |
+| ----- | -------------------------- | -------------: | :------: | ------- | -------------------------------------------------------------------------------- |
+| PK/FK | vendor_business_id         | `INT UNSIGNED` |   YES    |         | References `market_ops_vendor_businesses.vendor_business_id`.                    |
+| PK/FK | vendor_product_category_id | `INT UNSIGNED` |   YES    |         | References `market_ops_vendor_product_categories.vendor_product_category_id`.    |
 |       | sort_order                 | `INT UNSIGNED` |   YES    | `0`     | Explicit category order for this vendor; the lowest value is treated as primary. |
 
 **Indexes / constraints**

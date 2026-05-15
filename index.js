@@ -1,5 +1,9 @@
 import { createMarketOpsPublicRouter } from './routes.js'
 import {
+    isMarketOpsPublicMarketsEnabled,
+    isMarketOpsPublicVendorsEnabled
+} from './settings-helpers.js'
+import {
     createMarketOpsMarketsRouter,
     createMarketOpsNewVendorsRouter,
     createMarketOpsVendorsRouter
@@ -15,7 +19,8 @@ const marketOpsPlugin = {
             href: '/markets',
             index: 1,
             parent: null,
-            allowChildren: false
+            allowChildren: false,
+            isVisible: ({ settings } = {}) => isMarketOpsPublicMarketsEnabled(settings)
         },
         {
             id: 'public-vendors',
@@ -25,7 +30,8 @@ const marketOpsPlugin = {
             href: '/vendors',
             index: 2,
             parent: null,
-            allowChildren: false
+            allowChildren: false,
+            isVisible: ({ settings } = {}) => isMarketOpsPublicVendorsEnabled(settings)
         },
         {
             id: 'market-ops',
@@ -34,7 +40,8 @@ const marketOpsPlugin = {
             icon: 'shop',
             index: 55,
             parent: null,
-            allowChildren: true
+            allowChildren: true,
+            requiredPermissions: ['ws_plugin_market_ops.read', 'ws_plugin_market_ops.manage']
         },
         {
             id: 'market-ops-overview',
@@ -44,7 +51,8 @@ const marketOpsPlugin = {
             href: '/market-ops',
             index: 1,
             parent: 'plugin:ws_plugin_market_ops:market-ops',
-            allowChildren: false
+            allowChildren: false,
+            requiredPermissions: ['ws_plugin_market_ops.read', 'ws_plugin_market_ops.manage']
         },
         {
             id: 'market-ops-markets',
@@ -54,7 +62,8 @@ const marketOpsPlugin = {
             href: '/market-ops/market-groups',
             index: 2,
             parent: 'plugin:ws_plugin_market_ops:market-ops',
-            allowChildren: false
+            allowChildren: false,
+            requiredPermissions: ['ws_plugin_market_ops.read', 'ws_plugin_market_ops.manage']
         },
         {
             id: 'market-ops-vendors',
@@ -64,7 +73,8 @@ const marketOpsPlugin = {
             href: '/market-ops/vendors',
             index: 3,
             parent: 'plugin:ws_plugin_market_ops:market-ops',
-            allowChildren: false
+            allowChildren: false,
+            requiredPermissions: ['ws_plugin_market_ops.read', 'ws_plugin_market_ops.manage']
         },
         {
             id: 'market-ops-applications',
@@ -74,7 +84,8 @@ const marketOpsPlugin = {
             href: '/market-ops/applications',
             index: 4,
             parent: 'plugin:ws_plugin_market_ops:market-ops',
-            allowChildren: false
+            allowChildren: false,
+            requiredPermissions: ['ws_plugin_market_ops.read', 'ws_plugin_market_ops.manage']
         },
         {
             id: 'market-ops-setup',
@@ -84,7 +95,8 @@ const marketOpsPlugin = {
             href: '/market-ops/setup',
             index: 5,
             parent: 'plugin:ws_plugin_market_ops:market-ops',
-            allowChildren: false
+            allowChildren: false,
+            requiredPermissions: ['ws_plugin_market_ops.read', 'ws_plugin_market_ops.manage']
         }
         // {
         //     id: 'market-ops-reports',
@@ -116,6 +128,31 @@ const marketOpsPlugin = {
             label: 'Enable Market Operations Plugin',
             description:
                 'Local Market Operations plugin setting used to exercise the plugin contract.',
+            control: 'boolean',
+            group: 'Market Operations'
+        },
+        {
+            key: 'ws_plugin_market_ops.public_vendors_enabled',
+            defaultValue: 'false',
+            label: 'Allow Public View of Vendors',
+            description: 'Allow the public Vendors directory and vendor profile pages.',
+            control: 'boolean',
+            group: 'Market Operations'
+        },
+        {
+            key: 'ws_plugin_market_ops.public_markets_enabled',
+            defaultValue: 'true',
+            label: 'Allow Public View of Markets',
+            description: 'Allow the public Markets directory and market detail pages.',
+            control: 'boolean',
+            group: 'Market Operations'
+        },
+        {
+            key: 'ws_plugin_market_ops.auto_approve_vendor_businesses',
+            defaultValue: 'true',
+            label: 'Automatically Approve Vendor Businesses',
+            description:
+                'New vendor businesses and rejected resubmissions are approved automatically.',
             control: 'boolean',
             group: 'Market Operations'
         }
