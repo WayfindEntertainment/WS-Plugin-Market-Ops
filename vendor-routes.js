@@ -779,10 +779,21 @@ function buildPublicMarketDirectoryCards(
                     marketGroup.summary ||
                     marketGroup.description ||
                     'Upcoming market dates for this public market series.',
-                markets
+                markets,
+                earliestStartsAt: markets[0]?.startsAt ?? Number.POSITIVE_INFINITY
             }
         })
         .filter((marketGroup) => marketGroup.markets.length > 0)
+        .sort((left, right) => {
+            if (left.earliestStartsAt !== right.earliestStartsAt) {
+                return left.earliestStartsAt - right.earliestStartsAt
+            }
+
+            return (
+                left.groupName.localeCompare(right.groupName) ||
+                left.marketGroupId - right.marketGroupId
+            )
+        })
 }
 
 function buildPublicMarketDetailCard(marketGroup, market, locations, now = Date.now()) {

@@ -268,6 +268,92 @@ describe('createMarketOpsMarketsRouter', () => {
         expect(next).not.toHaveBeenCalled()
     })
 
+    test('directory sorts market groups by earliest public market first', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage)
+        const marketSetupService = {
+            listMarketGroups: jest.fn(async () => [
+                {
+                    marketGroupId: 6,
+                    slug: 'holiday-makers-market',
+                    groupName: 'Holiday Makers Market',
+                    summary: 'Indoor holiday shopping events.',
+                    isPublic: 1
+                },
+                {
+                    marketGroupId: 8,
+                    slug: 'summer-makers-market',
+                    groupName: 'Summer Makers Market',
+                    summary: 'Summer market dates.',
+                    isPublic: 1
+                }
+            ]),
+            listLocations: jest.fn(async () => [
+                {
+                    locationId: 14,
+                    locationName: 'Crossroads Neighborhood Church Lobby'
+                }
+            ]),
+            listMarketsByMarketGroupId: jest.fn(async (marketGroupId) => {
+                if (marketGroupId === 6) {
+                    return [
+                        {
+                            marketId: 12,
+                            slug: 'november-2026-holiday-market',
+                            marketName: 'November 2026 Holiday Market',
+                            summary: 'Later public market.',
+                            startsAt: Date.parse('2026-11-07T10:00:00-08:00'),
+                            endsAt: Date.parse('2026-11-07T16:00:00-08:00'),
+                            locationId: 14,
+                            applicationsOpen: 1,
+                            applicationsOpenAt: Date.parse('2026-08-01T09:00:00-07:00'),
+                            applicationsCloseAt: Date.parse('2026-10-01T17:00:00-07:00'),
+                            isPublic: 1
+                        }
+                    ]
+                }
+
+                if (marketGroupId === 8) {
+                    return [
+                        {
+                            marketId: 22,
+                            slug: 'july-2026-summer-market',
+                            marketName: 'July 2026 Summer Market',
+                            summary: 'Earlier public market.',
+                            startsAt: Date.parse('2026-07-11T10:00:00-07:00'),
+                            endsAt: Date.parse('2026-07-11T16:00:00-07:00'),
+                            locationId: 14,
+                            applicationsOpen: 1,
+                            applicationsOpenAt: Date.parse('2026-05-01T09:00:00-07:00'),
+                            applicationsCloseAt: Date.parse('2026-06-20T17:00:00-07:00'),
+                            isPublic: 1
+                        }
+                    ]
+                }
+
+                return []
+            })
+        }
+
+        createMarketOpsMarketsRouter(sdk, { marketSetupService })
+
+        const route = router.records.get.find((entry) => entry.path === '/')
+        const req = { query: {} }
+        const res = { status: jest.fn().mockReturnThis() }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        const marketGroupCards =
+            renderPage.mock.calls[0][2].locals.marketOpsMarketsDirectoryPageData.marketGroupCards
+        expect(marketGroupCards.map((card) => card.groupName)).toEqual([
+            'Summer Makers Market',
+            'Holiday Makers Market'
+        ])
+        expect(next).not.toHaveBeenCalled()
+    })
+
     test('public market detail renders only for public market slugs', async () => {
         const router = createRouterRecorder()
         const renderPage = jest.fn()
