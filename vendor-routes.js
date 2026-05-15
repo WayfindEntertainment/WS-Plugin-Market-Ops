@@ -1,5 +1,6 @@
 /* eslint-disable jsdoc/require-jsdoc, no-nested-ternary, prefer-destructuring */
 
+import { canManageVendorBusiness } from './permission-helpers.js'
 import createMarketOpsApplicationService from './services/application-service.js'
 import createMarketOpsMarketSetupService from './services/market-setup-service.js'
 import createMarketOpsVendorBusinessService from './services/vendor-business-service.js'
@@ -29,6 +30,8 @@ const VENDOR_NOTICE_MESSAGES = {
         type: 'success',
         message: 'Vendor business resubmitted for approval.'
     },
+    'vendor-business-archived': { type: 'success', message: 'Vendor business archived.' },
+    'vendor-business-restored': { type: 'success', message: 'Vendor business restored.' },
     'vendor-business-updated': { type: 'success', message: 'Vendor business updated.' },
     'application-created': { type: 'success', message: 'Application draft created.' },
     'application-updated': { type: 'success', message: 'Application draft updated.' },
@@ -250,15 +253,26 @@ function isRecoverableVendorRouteError(err) {
 }
 
 function getErrorMessage(err, fallbackMessage) {
+    const duplicateVendorSlugMessage =
+        'That business link is already being used. Please choose a different slug.'
+    const duplicateVendorSlugSignals = [err?.message, err?.sqlMessage, err?.sql]
+        .filter((value) => typeof value === 'string')
+        .join(' ')
+
+    if (
+        err?.code === 'ER_DUP_ENTRY' &&
+        duplicateVendorSlugSignals.includes(
+            'market_ops_vendor_businesses.uk_market_ops_vendor_businesses_slug'
+        )
+    ) {
+        return duplicateVendorSlugMessage
+    }
+
     if (typeof err?.message === 'string' && err.message.trim().length > 0) {
         return err.message
     }
 
     return fallbackMessage
-}
-
-function isAdminUser(req) {
-    return Array.isArray(req?.user?.permissions) && req.user.permissions.includes('admin.access')
 }
 
 async function renderPluginPage(req, res, renderPage, { page, title, locals, statusCode = 200 }) {
@@ -301,6 +315,10 @@ async function renderForbidden(req, res, renderPage) {
     })
 }
 
+function isVendorBusinessArchived(detail) {
+    return detail?.vendorBusiness?.archivedAt != null
+}
+
 function buildVendorBusinessFormValues(source = {}) {
     return {
         slug: normalizeTrimmedString(source.slug),
@@ -322,7 +340,12 @@ function buildVendorBusinessFormValues(source = {}) {
     }
 }
 
-function buildVendorBusinessInputFromFormValues(formValues, actorUserId, existingRecord = null) {
+function buildVendorBusinessInputFromFormValues(
+    formValues,
+    actorUserId,
+    existingRecord = null,
+    { requireLegalName = false, requirePhone = false } = {}
+) {
     const businessName = normalizeRequiredBoundedStringField(
         formValues.businessName,
         'Business name',
@@ -342,12 +365,19 @@ function buildVendorBusinessInputFromFormValues(formValues, actorUserId, existin
             'INVALID_VENDOR_BUSINESS_SLUG'
         ),
         businessName,
-        legalName: normalizeOptionalBoundedStringField(
-            formValues.legalName,
-            'Legal name',
-            255,
-            'INVALID_VENDOR_BUSINESS_LEGAL_NAME'
-        ),
+        legalName: requireLegalName
+            ? normalizeRequiredBoundedStringField(
+                  formValues.legalName,
+                  'Owner name (first and last)',
+                  255,
+                  'INVALID_VENDOR_BUSINESS_LEGAL_NAME'
+              )
+            : normalizeOptionalBoundedStringField(
+                  formValues.legalName,
+                  'Owner name (first and last)',
+                  255,
+                  'INVALID_VENDOR_BUSINESS_LEGAL_NAME'
+              ),
         summary: normalizeOptionalString(formValues.summary),
         description: normalizeOptionalString(formValues.description),
         email: normalizeOptionalBoundedStringField(
@@ -356,12 +386,19 @@ function buildVendorBusinessInputFromFormValues(formValues, actorUserId, existin
             255,
             'INVALID_VENDOR_BUSINESS_EMAIL'
         ),
-        phone: normalizeOptionalBoundedStringField(
-            formValues.phone,
-            'Phone',
-            64,
-            'INVALID_VENDOR_BUSINESS_PHONE'
-        ),
+        phone: requirePhone
+            ? normalizeRequiredBoundedStringField(
+                  formValues.phone,
+                  'Business phone number',
+                  64,
+                  'INVALID_VENDOR_BUSINESS_PHONE'
+              )
+            : normalizeOptionalBoundedStringField(
+                  formValues.phone,
+                  'Business phone number',
+                  64,
+                  'INVALID_VENDOR_BUSINESS_PHONE'
+              ),
         websiteUrl: normalizeOptionalBoundedStringField(
             formValues.websiteUrl,
             'Website URL',
@@ -450,6 +487,35 @@ async function findVendorBusinessDetailBySlug(vendorBusinessService, slug) {
         details.find((detail) => detail?.vendorBusiness?.slug?.toLowerCase() === normalizedSlug) ??
         null
     )
+}
+
+async function buildUniqueVendorBusinessSlug(vendorBusinessService, candidateSlug) {
+    const normalizedBaseSlug =
+        normalizeTrimmedString(candidateSlug).toLowerCase() || 'vendor-business'
+    if (typeof vendorBusinessService?.listVendorBusinessDetails !== 'function') {
+        return normalizedBaseSlug
+    }
+    const existingDetails = await vendorBusinessService.listVendorBusinessDetails()
+    const existingSlugs = new Set(
+        (Array.isArray(existingDetails) ? existingDetails : [])
+            .map((detail) => detail?.vendorBusiness?.slug)
+            .map((slug) => normalizeTrimmedString(slug).toLowerCase())
+            .filter(Boolean)
+    )
+
+    if (!existingSlugs.has(normalizedBaseSlug)) {
+        return normalizedBaseSlug
+    }
+
+    for (let suffix = 2; suffix < 1000; suffix += 1) {
+        const candidateWithSuffix = `${normalizedBaseSlug}-${suffix}`.slice(0, 128)
+
+        if (!existingSlugs.has(candidateWithSuffix)) {
+            return candidateWithSuffix
+        }
+    }
+
+    return `${normalizedBaseSlug}-${Date.now()}`.slice(0, 128)
 }
 
 function sortVendorBusinessDetailsForDirectory(details) {
@@ -1262,14 +1328,7 @@ async function requireVendorBusinessOwnerOrAdmin(
             return null
         }
 
-        if (isAdminUser(req)) {
-            return detail
-        }
-
-        const currentUserId = req?.user?.user_id
-        const isOwner = detail.owners.some((owner) => owner.userId === currentUserId)
-
-        if (!isOwner) {
+        if (!canManageVendorBusiness(req, detail)) {
             await renderForbidden(req, res, renderPage)
             return null
         }
@@ -1279,6 +1338,50 @@ async function requireVendorBusinessOwnerOrAdmin(
         next(err)
         return null
     }
+}
+
+async function renderVendorManagePage(
+    req,
+    res,
+    renderPage,
+    database,
+    applicationService,
+    detail,
+    {
+        flash = null,
+        formValues = buildVendorBusinessFormValues({
+            ...detail.vendorBusiness,
+            productCategoryIds: detail.productCategoryAssignments.map((assignment) =>
+                String(assignment.vendorProductCategoryId)
+            )
+        }),
+        statusCode = 200
+    } = {}
+) {
+    const [allCategories, sidebarData] = await Promise.all([
+        listVendorProductCategories(database),
+        loadVendorManageSidebarData(database, applicationService, detail)
+    ])
+
+    await renderPluginPage(req, res, renderPage, {
+        page: 'pages/vendors/manage',
+        title: detail.vendorBusiness.businessName,
+        statusCode,
+        locals: {
+            marketOpsVendorManagePageData: {
+                flash,
+                vendorDetail: detail,
+                ownerProfiles: sidebarData.ownerProfiles,
+                upcomingAppliedMarkets: sidebarData.upcomingAppliedMarkets,
+                applicationsHref: sidebarData.applicationsHref,
+                formAction: `/vendors/${detail.vendorBusiness.slug}/manage`,
+                archiveAction: `/vendors/${detail.vendorBusiness.slug}/manage/archive`,
+                restoreAction: `/vendors/${detail.vendorBusiness.slug}/manage/restore`,
+                formValues,
+                categorySelection: buildVendorManageCategoryState(allCategories, detail, formValues)
+            }
+        }
+    })
 }
 
 function buildDependencies(sdk, overrides = {}) {
@@ -1340,14 +1443,43 @@ export function createMarketOpsNewVendorsRouter(sdk, overrides = {}) {
         const formValues = buildVendorBusinessFormValues(req.body)
 
         try {
-            const createdDetail = await vendorBusinessService.createVendorBusiness({
-                vendorBusiness: buildVendorBusinessInputFromFormValues(
-                    formValues,
-                    req?.user?.user_id ?? null
-                ),
-                ownerUserId: req?.user?.user_id ?? null,
-                productCategories: buildProductCategoryAssignments(formValues)
-            })
+            const vendorBusinessInput = buildVendorBusinessInputFromFormValues(
+                formValues,
+                req?.user?.user_id ?? null,
+                null,
+                {
+                    requireLegalName: true,
+                    requirePhone: true
+                }
+            )
+            let uniqueSlug = await buildUniqueVendorBusinessSlug(
+                vendorBusinessService,
+                vendorBusinessInput.slug
+            )
+            let createdDetail = null
+
+            for (let attempt = 0; attempt < 3; attempt += 1) {
+                try {
+                    createdDetail = await vendorBusinessService.createVendorBusiness({
+                        vendorBusiness: {
+                            ...vendorBusinessInput,
+                            slug: uniqueSlug
+                        },
+                        ownerUserId: req?.user?.user_id ?? null,
+                        productCategories: buildProductCategoryAssignments(formValues)
+                    })
+                    break
+                } catch (err) {
+                    if (err?.code !== 'ER_DUP_ENTRY' || attempt === 2) {
+                        throw err
+                    }
+
+                    uniqueSlug = await buildUniqueVendorBusinessSlug(
+                        vendorBusinessService,
+                        uniqueSlug
+                    )
+                }
+            }
 
             res.redirect(
                 303,
@@ -1517,7 +1649,9 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
         try {
             const approvedDetails = sortVendorBusinessDetailsForDirectory(
                 (await vendorBusinessService.listVendorBusinessDetails()).filter(
-                    (detail) => detail.vendorBusiness.approvalStatus === 'approved'
+                    (detail) =>
+                        detail.vendorBusiness.approvalStatus === 'approved' &&
+                        !isVendorBusinessArchived(detail)
                 )
             )
 
@@ -1552,32 +1686,17 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
         }
 
         try {
-            const [allCategories, sidebarData] = await Promise.all([
-                listVendorProductCategories(database),
-                loadVendorManageSidebarData(database, applicationService, detail)
-            ])
-
-            await renderPluginPage(req, res, renderPage, {
-                page: 'pages/vendors/manage',
-                title: detail.vendorBusiness.businessName,
-                locals: {
-                    marketOpsVendorManagePageData: {
-                        flash: resolveNotice(req.query),
-                        vendorDetail: detail,
-                        ownerProfiles: sidebarData.ownerProfiles,
-                        upcomingAppliedMarkets: sidebarData.upcomingAppliedMarkets,
-                        applicationsHref: sidebarData.applicationsHref,
-                        formAction: `/vendors/${detail.vendorBusiness.slug}/manage`,
-                        formValues: buildVendorBusinessFormValues({
-                            ...detail.vendorBusiness,
-                            productCategoryIds: detail.productCategoryAssignments.map(
-                                (assignment) => String(assignment.vendorProductCategoryId)
-                            )
-                        }),
-                        categorySelection: buildVendorManageCategoryState(allCategories, detail)
-                    }
+            await renderVendorManagePage(
+                req,
+                res,
+                renderPage,
+                database,
+                applicationService,
+                detail,
+                {
+                    flash: resolveNotice(req.query)
                 }
-            })
+            )
         } catch (err) {
             next(err)
         }
@@ -1606,7 +1725,11 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                     vendorBusiness: buildVendorBusinessInputFromFormValues(
                         formValues,
                         req?.user?.user_id ?? null,
-                        detail.vendorBusiness
+                        detail.vendorBusiness,
+                        {
+                            requireLegalName: true,
+                            requirePhone: true
+                        }
                     ),
                     productCategories: buildProductCategoryAssignments(formValues)
                 }
@@ -1623,38 +1746,25 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
             }
 
             try {
-                const [allCategories, sidebarData] = await Promise.all([
-                    listVendorProductCategories(database),
-                    loadVendorManageSidebarData(database, applicationService, detail)
-                ])
-
-                await renderPluginPage(req, res, renderPage, {
-                    page: 'pages/vendors/manage',
-                    title: detail.vendorBusiness.businessName,
-                    statusCode: err.statusCode ?? 400,
-                    locals: {
-                        marketOpsVendorManagePageData: {
-                            flash: {
-                                type: 'danger',
-                                message: getErrorMessage(
-                                    err,
-                                    'We could not update that vendor business.'
-                                )
-                            },
-                            vendorDetail: detail,
-                            ownerProfiles: sidebarData.ownerProfiles,
-                            upcomingAppliedMarkets: sidebarData.upcomingAppliedMarkets,
-                            applicationsHref: sidebarData.applicationsHref,
-                            formAction: `/vendors/${detail.vendorBusiness.slug}/manage`,
-                            formValues,
-                            categorySelection: buildVendorManageCategoryState(
-                                allCategories,
-                                detail,
-                                formValues
+                await renderVendorManagePage(
+                    req,
+                    res,
+                    renderPage,
+                    database,
+                    applicationService,
+                    detail,
+                    {
+                        flash: {
+                            type: 'danger',
+                            message: getErrorMessage(
+                                err,
+                                'We could not update that vendor business.'
                             )
-                        }
+                        },
+                        formValues,
+                        statusCode: err.statusCode ?? 400
                     }
-                })
+                )
             } catch (renderErr) {
                 next(renderErr)
             }
@@ -1694,42 +1804,123 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
             }
 
             try {
-                const [allCategories, sidebarData] = await Promise.all([
-                    listVendorProductCategories(database),
-                    loadVendorManageSidebarData(database, applicationService, detail)
-                ])
-
-                await renderPluginPage(req, res, renderPage, {
-                    page: 'pages/vendors/manage',
-                    title: detail.vendorBusiness.businessName,
-                    statusCode: err.statusCode ?? 400,
-                    locals: {
-                        marketOpsVendorManagePageData: {
-                            flash: {
-                                type: 'danger',
-                                message: getErrorMessage(
-                                    err,
-                                    'We could not resubmit that vendor business.'
-                                )
-                            },
-                            vendorDetail: detail,
-                            ownerProfiles: sidebarData.ownerProfiles,
-                            upcomingAppliedMarkets: sidebarData.upcomingAppliedMarkets,
-                            applicationsHref: sidebarData.applicationsHref,
-                            formAction: `/vendors/${detail.vendorBusiness.slug}/manage`,
-                            formValues: buildVendorBusinessFormValues({
-                                ...detail.vendorBusiness,
-                                productCategoryIds: detail.productCategoryAssignments.map(
-                                    (assignment) => String(assignment.vendorProductCategoryId)
-                                )
-                            }),
-                            categorySelection: buildVendorManageCategoryState(allCategories, detail)
-                        }
+                await renderVendorManagePage(
+                    req,
+                    res,
+                    renderPage,
+                    database,
+                    applicationService,
+                    detail,
+                    {
+                        flash: {
+                            type: 'danger',
+                            message: getErrorMessage(
+                                err,
+                                'We could not resubmit that vendor business.'
+                            )
+                        },
+                        statusCode: err.statusCode ?? 400
                     }
-                })
+                )
             } catch (renderErr) {
                 next(renderErr)
             }
+        }
+    })
+
+    router.post('/:vendorSlug/manage/archive', requireAuth, async (req, res, next) => {
+        const detail = await requireVendorBusinessOwnerOrAdmin(
+            req,
+            res,
+            next,
+            renderPage,
+            vendorBusinessService,
+            req?.params?.vendorSlug
+        )
+
+        if (!detail) {
+            return
+        }
+
+        const confirmationName = normalizeTrimmedString(req?.body?.archiveConfirmationName)
+
+        if (isVendorBusinessArchived(detail)) {
+            res.redirect(
+                303,
+                `/vendors/${detail.vendorBusiness.slug}/manage?notice=vendor-business-archived`
+            )
+            return
+        }
+
+        if (confirmationName !== normalizeTrimmedString(detail.vendorBusiness.businessName)) {
+            try {
+                await renderVendorManagePage(
+                    req,
+                    res,
+                    renderPage,
+                    database,
+                    applicationService,
+                    detail,
+                    {
+                        flash: {
+                            type: 'danger',
+                            message: 'Type the business name exactly as shown before archiving it.'
+                        },
+                        statusCode: 400
+                    }
+                )
+            } catch (renderErr) {
+                next(renderErr)
+            }
+            return
+        }
+
+        try {
+            await vendorBusinessService.archiveVendorBusiness(
+                detail.vendorBusiness.vendorBusinessId,
+                {
+                    archivedByUserId: req?.user?.user_id ?? null,
+                    updatedByUserId: req?.user?.user_id ?? null
+                }
+            )
+
+            res.redirect(
+                303,
+                `/vendors/${detail.vendorBusiness.slug}/manage?notice=vendor-business-archived`
+            )
+        } catch (err) {
+            next(err)
+        }
+    })
+
+    router.post('/:vendorSlug/manage/restore', requireAuth, async (req, res, next) => {
+        const detail = await requireVendorBusinessOwnerOrAdmin(
+            req,
+            res,
+            next,
+            renderPage,
+            vendorBusinessService,
+            req?.params?.vendorSlug
+        )
+
+        if (!detail) {
+            return
+        }
+
+        try {
+            await vendorBusinessService.restoreVendorBusiness(
+                detail.vendorBusiness.vendorBusinessId,
+                {
+                    updatedByUserId: req?.user?.user_id ?? null
+                }
+            )
+
+            res.redirect(
+                303,
+                `/vendors/${detail.vendorBusiness.slug}/manage?notice=vendor-business-restored`
+            )
+        } catch (err) {
+            next(err)
         }
     })
 
@@ -2589,7 +2780,11 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                 req?.params?.vendorSlug
             )
 
-            if (!detail || detail.vendorBusiness.approvalStatus !== 'approved') {
+            if (
+                !detail ||
+                detail.vendorBusiness.approvalStatus !== 'approved' ||
+                isVendorBusinessArchived(detail)
+            ) {
                 await renderNotFound(
                     req,
                     res,
@@ -2600,9 +2795,7 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                 return
             }
 
-            const currentUserId = req?.user?.user_id ?? null
-            const canManageVendorBusiness =
-                isAdminUser(req) || detail.owners.some((owner) => owner.userId === currentUserId)
+            const canManageVendorBusinessAccess = canManageVendorBusiness(req, detail)
             const [bareApplications, locations] = await Promise.all([
                 applicationService.listVendorMarketApplicationsByVendorBusinessId(
                     detail.vendorBusiness.vendorBusinessId
@@ -2623,7 +2816,7 @@ export function createMarketOpsVendorsRouter(sdk, overrides = {}) {
                 locals: {
                     marketOpsVendorProfilePageData: {
                         vendorDetail: detail,
-                        canManageVendorBusiness,
+                        canManageVendorBusiness: canManageVendorBusinessAccess,
                         upcomingMarkets: buildPublicUpcomingVendorMarketCards(
                             applicationDetails,
                             locations

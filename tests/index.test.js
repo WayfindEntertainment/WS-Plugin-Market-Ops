@@ -86,4 +86,18 @@ describe('Market Ops plugin declaration', () => {
             })
         ])
     })
+
+    test('declares Market Ops read, manage, and vendor-manage permissions', () => {
+        expect(marketOpsPlugin.permissions).toEqual(
+            expect.objectContaining({
+                ws_plugin_market_ops: expect.objectContaining({
+                    permissions: expect.objectContaining({
+                        'ws_plugin_market_ops.read': expect.any(String),
+                        'ws_plugin_market_ops.manage': expect.any(String),
+                        'ws_plugin_market_ops.vendor.manage': expect.any(String)
+                    })
+                })
+            })
+        )
+    })
 })

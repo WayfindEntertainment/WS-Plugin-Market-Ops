@@ -36,6 +36,8 @@ const VENDOR_APPROVAL_STATUSES = ['pending', 'approved', 'rejected']
  *   approvedByUserId: number|null,
  *   rejectedAt: number|null,
  *   rejectedByUserId: number|null,
+ *   archivedAt: number|null,
+ *   archivedByUserId: number|null,
  *   createdAt: number,
  *   createdByUserId: number|null,
  *   updatedAt: number,
@@ -61,6 +63,9 @@ function mapVendorBusinessRow(row) {
         rejectedAt: typeof row.rejected_at === 'number' ? row.rejected_at : null,
         rejectedByUserId:
             typeof row.rejected_by_user_id === 'number' ? row.rejected_by_user_id : null,
+        archivedAt: typeof row.archived_at === 'number' ? row.archived_at : null,
+        archivedByUserId:
+            typeof row.archived_by_user_id === 'number' ? row.archived_by_user_id : null,
         createdAt: Number(row.created_at),
         createdByUserId: typeof row.created_by_user_id === 'number' ? row.created_by_user_id : null,
         updatedAt: Number(row.updated_at),
@@ -101,6 +106,8 @@ function mapVendorBusinessOwnerRow(row) {
  *   approvedByUserId: number|null,
  *   rejectedAt: number|null,
  *   rejectedByUserId: number|null,
+ *   archivedAt: number|null,
+ *   archivedByUserId: number|null,
  *   createdAt: number,
  *   createdByUserId: number|null,
  *   updatedAt: number,
@@ -221,6 +228,22 @@ function normalizeVendorBusinessInput(input, existingRecord) {
                       'rejectedByUserId',
                       'INVALID_VENDOR_BUSINESS_REJECTED_BY_USER_ID'
                   ),
+        archivedAt:
+            typeof normalizedInput.archivedAt === 'undefined'
+                ? (existingRecord?.archivedAt ?? null)
+                : normalizeOptionalEpochMs(
+                      normalizedInput.archivedAt,
+                      'archivedAt',
+                      'INVALID_VENDOR_BUSINESS_ARCHIVED_AT'
+                  ),
+        archivedByUserId:
+            typeof normalizedInput.archivedByUserId === 'undefined'
+                ? (existingRecord?.archivedByUserId ?? null)
+                : normalizeOptionalPositiveInteger(
+                      normalizedInput.archivedByUserId,
+                      'archivedByUserId',
+                      'INVALID_VENDOR_BUSINESS_ARCHIVED_BY_USER_ID'
+                  ),
         createdAt:
             typeof normalizedInput.createdAt === 'undefined'
                 ? (existingRecord?.createdAt ?? now)
@@ -282,6 +305,8 @@ async function readVendorBusinessById(queryable, vendorBusinessId) {
             approved_by_user_id,
             rejected_at,
             rejected_by_user_id,
+            archived_at,
+            archived_by_user_id,
             created_at,
             created_by_user_id,
             updated_at,
@@ -324,11 +349,13 @@ export async function insertVendorBusiness(queryable, input) {
             approved_by_user_id,
             rejected_at,
             rejected_by_user_id,
+            archived_at,
+            archived_by_user_id,
             created_at,
             created_by_user_id,
             updated_at,
             updated_by_user_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
             normalizedInput.slug,
@@ -345,6 +372,8 @@ export async function insertVendorBusiness(queryable, input) {
             normalizedInput.approvedByUserId,
             normalizedInput.rejectedAt,
             normalizedInput.rejectedByUserId,
+            normalizedInput.archivedAt,
+            normalizedInput.archivedByUserId,
             normalizedInput.createdAt,
             normalizedInput.createdByUserId,
             normalizedInput.updatedAt,
@@ -412,6 +441,8 @@ export async function listVendorBusinesses(queryable) {
             approved_by_user_id,
             rejected_at,
             rejected_by_user_id,
+            archived_at,
+            archived_by_user_id,
             created_at,
             created_by_user_id,
             updated_at,
@@ -470,6 +501,8 @@ export async function updateVendorBusinessById(queryable, vendorBusinessId, inpu
             approved_by_user_id = ?,
             rejected_at = ?,
             rejected_by_user_id = ?,
+            archived_at = ?,
+            archived_by_user_id = ?,
             created_at = ?,
             created_by_user_id = ?,
             updated_at = ?,
@@ -491,6 +524,8 @@ export async function updateVendorBusinessById(queryable, vendorBusinessId, inpu
             normalizedInput.approvedByUserId,
             normalizedInput.rejectedAt,
             normalizedInput.rejectedByUserId,
+            normalizedInput.archivedAt,
+            normalizedInput.archivedByUserId,
             normalizedInput.createdAt,
             normalizedInput.createdByUserId,
             normalizedInput.updatedAt,

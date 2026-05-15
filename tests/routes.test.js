@@ -427,6 +427,10 @@ describe('createMarketOpsPublicRouter', () => {
                 '/market-groups/create'
             ])
         )
+        expect(sdk.web.guards.requirePermissions).toHaveBeenCalledWith([
+            'ws_plugin_market_ops.read',
+            'ws_plugin_market_ops.manage'
+        ])
     })
 
     test('renders the dashboard with aggregated setup data', async () => {

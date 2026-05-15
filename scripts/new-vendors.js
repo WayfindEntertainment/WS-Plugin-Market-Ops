@@ -3,6 +3,7 @@
 function initNewVendorCategoryModal() {
     const categoryInputs = Array.from(document.querySelectorAll('[data-new-vendors-category]'))
     const categorySummary = document.querySelector('[data-new-vendors-category-summary]')
+    const categoryBadges = document.querySelector('[data-new-vendors-category-badges]')
     const clearButton = document.querySelector('[data-new-vendors-category-clear]')
 
     if (categoryInputs.length === 0 || !categorySummary) {
@@ -16,21 +17,29 @@ function initNewVendorCategoryModal() {
         )
 
         if (selectedLabels.length === 0) {
+            if (categoryBadges) {
+                categoryBadges.hidden = true
+                categoryBadges.replaceChildren()
+            }
+
+            categorySummary.hidden = false
             categorySummary.textContent = 'No categories selected yet.'
             return
         }
 
-        if (selectedLabels.length === 1) {
-            categorySummary.textContent = selectedLabels[0]
-            return
+        if (categoryBadges) {
+            const badgeNodes = selectedLabels.map((label) => {
+                const badge = document.createElement('span')
+                badge.className = 'badge text-bg-light border'
+                badge.textContent = label
+                return badge
+            })
+
+            categoryBadges.replaceChildren(...badgeNodes)
+            categoryBadges.hidden = false
         }
 
-        if (selectedLabels.length === 2) {
-            categorySummary.textContent = selectedLabels.join(' + ')
-            return
-        }
-
-        categorySummary.textContent = `${selectedLabels.length} categories selected`
+        categorySummary.hidden = true
     }
 
     function clearSelections() {
@@ -52,8 +61,44 @@ function initNewVendorCategoryModal() {
     updateSummary()
 }
 
+function initNewVendorFormValidation() {
+    const form = document.querySelector('[data-new-vendors-form]')
+
+    if (!form) {
+        return
+    }
+
+    form.addEventListener('submit', (event) => {
+        if (form.checkValidity()) {
+            return
+        }
+
+        event.preventDefault()
+        event.stopPropagation()
+        form.classList.add('was-validated')
+        form.querySelector(':invalid')?.focus()
+    })
+}
+
+function initNewVendorUnsavedChangesGuard() {
+    window.initializeMarketOpsUnsavedFormGuard?.({
+        formSelector: '[data-new-vendors-form]',
+        title: 'Unsaved Changes',
+        message:
+            'You have unsaved changes to this vendor business. Save them before leaving or discard them.',
+        saveLabel: 'Save Business',
+        discardLabel: 'Discard Changes'
+    })
+}
+
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initNewVendorCategoryModal)
+    document.addEventListener('DOMContentLoaded', () => {
+        initNewVendorCategoryModal()
+        initNewVendorFormValidation()
+        initNewVendorUnsavedChangesGuard()
+    })
 } else {
     initNewVendorCategoryModal()
+    initNewVendorFormValidation()
+    initNewVendorUnsavedChangesGuard()
 }

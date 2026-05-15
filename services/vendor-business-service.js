@@ -149,6 +149,14 @@ const defaultDependencies = {
  *     approvalNotes?: unknown,
  *     updatedByUserId?: number|null
  *   }) => Promise<ReturnType<typeof buildVendorBusinessDetail>>,
+ *   archiveVendorBusiness: (vendorBusinessId: number, input: {
+ *     archivedAt?: number,
+ *     archivedByUserId?: number|null,
+ *     updatedByUserId?: number|null
+ *   }) => Promise<ReturnType<typeof buildVendorBusinessDetail>>,
+ *   restoreVendorBusiness: (vendorBusinessId: number, input: {
+ *     updatedByUserId?: number|null
+ *   }) => Promise<ReturnType<typeof buildVendorBusinessDetail>>,
  *   approveVendorBusiness: (vendorBusinessId: number, input: {
  *     approvalNotes?: unknown,
  *     approvedAt?: number,
@@ -510,6 +518,72 @@ export function createMarketOpsVendorBusinessService(database, overrides = {}) {
                     approvedByUserId: currentRecord.approvedByUserId,
                     rejectedAt: currentRecord.rejectedAt,
                     rejectedByUserId: currentRecord.rejectedByUserId,
+                    updatedAt: now,
+                    updatedByUserId:
+                        typeof normalizedInput.updatedByUserId === 'undefined'
+                            ? currentRecord.updatedByUserId
+                            : normalizedInput.updatedByUserId
+                })
+
+                return loadVendorBusinessDetail(conn, normalizedVendorBusinessId)
+            })
+        },
+
+        async archiveVendorBusiness(vendorBusinessId, input) {
+            const normalizedVendorBusinessId = assertPositiveInteger(
+                vendorBusinessId,
+                'vendorBusinessId',
+                'INVALID_VENDOR_BUSINESS_ID'
+            )
+            const normalizedInput = assertPlainObject(
+                input,
+                'input',
+                'INVALID_VENDOR_BUSINESS_ARCHIVE_INPUT'
+            )
+            const now = Date.now()
+
+            return normalizedDatabase.withTransaction(async (conn) => {
+                const currentRecord = await requireVendorBusiness(conn, normalizedVendorBusinessId)
+
+                await dependencies.updateVendorBusinessById(conn, normalizedVendorBusinessId, {
+                    archivedAt:
+                        typeof normalizedInput.archivedAt === 'undefined'
+                            ? now
+                            : normalizedInput.archivedAt,
+                    archivedByUserId:
+                        typeof normalizedInput.archivedByUserId === 'undefined'
+                            ? null
+                            : normalizedInput.archivedByUserId,
+                    updatedAt: now,
+                    updatedByUserId:
+                        typeof normalizedInput.updatedByUserId === 'undefined'
+                            ? currentRecord.updatedByUserId
+                            : normalizedInput.updatedByUserId
+                })
+
+                return loadVendorBusinessDetail(conn, normalizedVendorBusinessId)
+            })
+        },
+
+        async restoreVendorBusiness(vendorBusinessId, input) {
+            const normalizedVendorBusinessId = assertPositiveInteger(
+                vendorBusinessId,
+                'vendorBusinessId',
+                'INVALID_VENDOR_BUSINESS_ID'
+            )
+            const normalizedInput = assertPlainObject(
+                input,
+                'input',
+                'INVALID_VENDOR_BUSINESS_RESTORE_INPUT'
+            )
+            const now = Date.now()
+
+            return normalizedDatabase.withTransaction(async (conn) => {
+                const currentRecord = await requireVendorBusiness(conn, normalizedVendorBusinessId)
+
+                await dependencies.updateVendorBusinessById(conn, normalizedVendorBusinessId, {
+                    archivedAt: null,
+                    archivedByUserId: null,
                     updatedAt: now,
                     updatedByUserId:
                         typeof normalizedInput.updatedByUserId === 'undefined'

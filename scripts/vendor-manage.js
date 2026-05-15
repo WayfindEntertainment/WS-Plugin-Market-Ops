@@ -36,6 +36,61 @@ function initializeVendorManageSlugAutofill() {
     })
 }
 
+function initializeVendorManageFormValidation() {
+    const form = document.querySelector('[data-manage-vendors-form]')
+
+    if (!form) {
+        return
+    }
+
+    form.addEventListener('submit', (event) => {
+        if (form.checkValidity()) {
+            return
+        }
+
+        event.preventDefault()
+        event.stopPropagation()
+        form.classList.add('was-validated')
+        form.querySelector(':invalid')?.focus()
+    })
+}
+
+function initializeVendorManageUnsavedChangesGuard() {
+    window.initializeMarketOpsUnsavedFormGuard?.({
+        formSelector: '[data-manage-vendors-form]',
+        title: 'Unsaved Changes',
+        message:
+            'You have unsaved changes to this vendor business. Save them before leaving or discard them.',
+        saveLabel: 'Save Business',
+        discardLabel: 'Discard Changes'
+    })
+}
+
+function initializeVendorArchiveConfirmation() {
+    const form = document.querySelector('[data-vendor-archive-form]')
+    const input = form?.querySelector('[data-vendor-archive-confirmation-input]')
+    const submitButton = form?.querySelector('[data-vendor-archive-submit]')
+
+    if (!form || !input || !submitButton) {
+        return
+    }
+
+    const expectedValue = (
+        input.getAttribute('data-vendor-archive-confirmation-expected') || ''
+    ).trim()
+
+    function syncArchiveButtonState() {
+        submitButton.disabled = input.value.trim() !== expectedValue
+    }
+
+    input.addEventListener('input', syncArchiveButtonState)
+    form.addEventListener('reset', () => {
+        requestAnimationFrame(syncArchiveButtonState)
+    })
+
+    syncArchiveButtonState()
+}
+
 function initializeVendorManageProductCategories() {
     const form = document.querySelector('[data-vendor-manage-product-category-form]')
 
@@ -69,6 +124,7 @@ function initializeVendorManageProductCategories() {
 
     let draggedItem = null
     let armedDragItem = null
+    let pointerDragState = null
 
     function getItems() {
         return Array.from(list.querySelectorAll('[data-vendor-manage-product-category-item]'))
@@ -298,8 +354,8 @@ function initializeVendorManageProductCategories() {
         animateLayoutChange(beforeRects)
     }
 
-    function getDragAfterElement(pointerY) {
-        const draggableItems = getItems().filter((item) => item !== draggedItem)
+    function getDragAfterElement(pointerY, activeItem = draggedItem) {
+        const draggableItems = getItems().filter((item) => item !== activeItem)
 
         let closest = { offset: Number.NEGATIVE_INFINITY, element: null }
 
@@ -362,21 +418,105 @@ function initializeVendorManageProductCategories() {
     })
 
     list.addEventListener('pointerdown', (event) => {
-        const handle = event.target.closest('[data-vendor-manage-product-category-handle]')
-
-        if (!handle) {
+        if (
+            event.target.closest('[data-vendor-manage-product-category-move]') ||
+            event.target.closest('[data-vendor-manage-product-category-remove]')
+        ) {
             armedDragItem = null
+            pointerDragState = null
             return
         }
 
-        armedDragItem = handle.closest('[data-vendor-manage-product-category-item]')
+        const item = event.target.closest('[data-vendor-manage-product-category-item]')
+
+        if (!item) {
+            armedDragItem = null
+            pointerDragState = null
+            return
+        }
+
+        armedDragItem = item
+
+        if (!armedDragItem || event.pointerType === 'mouse') {
+            return
+        }
+
+        pointerDragState = {
+            pointerId: event.pointerId,
+            item: armedDragItem,
+            startX: event.clientX,
+            startY: event.clientY,
+            isDragging: false
+        }
+
+        item.setPointerCapture?.(event.pointerId)
+    })
+
+    list.addEventListener('pointermove', (event) => {
+        if (!pointerDragState || event.pointerId !== pointerDragState.pointerId) {
+            return
+        }
+
+        const moveDistance = Math.hypot(
+            event.clientX - pointerDragState.startX,
+            event.clientY - pointerDragState.startY
+        )
+
+        if (!pointerDragState.isDragging) {
+            if (moveDistance < 8) {
+                return
+            }
+
+            pointerDragState.isDragging = true
+            draggedItem = pointerDragState.item
+            draggedItem.classList.add('market-ops-sortable-card-dragging')
+        }
+
+        event.preventDefault()
+
+        const beforeRects = captureItemRects()
+        const afterElement = getDragAfterElement(event.clientY, pointerDragState.item)
+
+        if (!afterElement) {
+            if (list.lastElementChild === pointerDragState.item) {
+                return
+            }
+
+            list.appendChild(pointerDragState.item)
+            animateLayoutChange(beforeRects)
+            return
+        }
+
+        if (
+            afterElement === pointerDragState.item ||
+            pointerDragState.item.nextElementSibling === afterElement
+        ) {
+            return
+        }
+
+        list.insertBefore(pointerDragState.item, afterElement)
+        animateLayoutChange(beforeRects)
     })
 
     list.addEventListener('pointerup', () => {
+        if (pointerDragState?.isDragging && pointerDragState.item) {
+            pointerDragState.item.classList.remove('market-ops-sortable-card-dragging')
+            draggedItem = null
+            refreshUiState()
+        }
+
+        pointerDragState = null
         armedDragItem = null
     })
 
     list.addEventListener('pointercancel', () => {
+        if (pointerDragState?.isDragging && pointerDragState.item) {
+            pointerDragState.item.classList.remove('market-ops-sortable-card-dragging')
+            draggedItem = null
+            refreshUiState()
+        }
+
+        pointerDragState = null
         armedDragItem = null
     })
 
@@ -439,6 +579,9 @@ function initializeVendorManageProductCategories() {
 
 function initializeVendorManagePage() {
     initializeVendorManageSlugAutofill()
+    initializeVendorManageFormValidation()
+    initializeVendorManageUnsavedChangesGuard()
+    initializeVendorArchiveConfirmation()
     initializeVendorManageProductCategories()
 }
 

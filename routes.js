@@ -1,9 +1,10 @@
 /* eslint-disable jsdoc/require-param-description, jsdoc/require-param-type, jsdoc/require-returns */
 
 import createMarketOpsReviewRouter from './market-ops-review-routes.js'
+import { MARKET_OPS_REVIEW_PERMISSION_CODES } from './permission-helpers.js'
 import createMarketOpsMarketSetupService from './services/market-setup-service.js'
 
-const MARKET_OPS_PERMISSION_CODES = ['ws_plugin_market_ops.read']
+const MARKET_OPS_PERMISSION_CODES = MARKET_OPS_REVIEW_PERMISSION_CODES
 
 export const MARKET_GROUP_FEE_MODE_OPTIONS = [
     { value: 'none', label: 'No application fee' },

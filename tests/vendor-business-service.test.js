@@ -47,6 +47,8 @@ describe('createMarketOpsVendorBusinessService', () => {
             approvedByUserId: null,
             rejectedAt: null,
             rejectedByUserId: null,
+            archivedAt: null,
+            archivedByUserId: null,
             createdAt: 1000,
             createdByUserId: 7,
             updatedAt: 1001,
@@ -203,6 +205,8 @@ describe('createMarketOpsVendorBusinessService', () => {
             approvedByUserId: null,
             rejectedAt: 500,
             rejectedByUserId: 9,
+            archivedAt: null,
+            archivedByUserId: null,
             createdAt: 1000,
             createdByUserId: 7,
             updatedAt: 1001,
@@ -278,6 +282,8 @@ describe('createMarketOpsVendorBusinessService', () => {
             approvedByUserId: null,
             rejectedAt: 500,
             rejectedByUserId: 9,
+            archivedAt: null,
+            archivedByUserId: null,
             createdAt: 1000,
             createdByUserId: 7,
             updatedAt: 1001,
@@ -323,6 +329,140 @@ describe('createMarketOpsVendorBusinessService', () => {
                 approvedByUserId: null,
                 rejectedAt: 500,
                 rejectedByUserId: 9,
+                updatedByUserId: 11
+            })
+        )
+    })
+
+    test('archives one vendor business without deleting its approval state', async () => {
+        const database = createDatabase()
+        const currentVendorBusiness = {
+            vendorBusinessId: 41,
+            slug: 'coffee-beans',
+            businessName: 'Coffee Beans',
+            legalName: null,
+            summary: null,
+            description: null,
+            email: null,
+            phone: null,
+            websiteUrl: null,
+            approvalStatus: 'approved',
+            approvalNotes: null,
+            approvedAt: 900,
+            approvedByUserId: 8,
+            rejectedAt: null,
+            rejectedByUserId: null,
+            archivedAt: null,
+            archivedByUserId: null,
+            createdAt: 1000,
+            createdByUserId: 7,
+            updatedAt: 1001,
+            updatedByUserId: 8
+        }
+        const archivedVendorBusiness = {
+            ...currentVendorBusiness,
+            archivedAt: 2000,
+            archivedByUserId: 11,
+            updatedAt: 2000,
+            updatedByUserId: 11
+        }
+        const dependencies = {
+            insertVendorBusiness: jest.fn(),
+            getVendorBusinessById: jest
+                .fn()
+                .mockResolvedValueOnce(currentVendorBusiness)
+                .mockResolvedValueOnce(archivedVendorBusiness),
+            listVendorBusinesses: jest.fn(),
+            updateVendorBusinessById: jest.fn(async () => archivedVendorBusiness),
+            insertVendorBusinessOwner: jest.fn(),
+            listVendorBusinessOwnersByVendorBusinessId: jest.fn(async () => []),
+            listVendorBusinessOwnershipsByUserId: jest.fn(),
+            deleteVendorBusinessOwner: jest.fn(),
+            getVendorProductCategoryById: jest.fn(),
+            insertVendorBusinessProductCategory: jest.fn(),
+            listVendorBusinessProductCategoriesByVendorBusinessId: jest.fn(async () => []),
+            deleteVendorBusinessProductCategoriesByVendorBusinessId: jest.fn()
+        }
+        const service = createMarketOpsVendorBusinessService(database, dependencies)
+
+        await service.archiveVendorBusiness(41, {
+            archivedAt: 2000,
+            archivedByUserId: 11,
+            updatedByUserId: 11
+        })
+
+        expect(dependencies.updateVendorBusinessById).toHaveBeenCalledWith(
+            expect.any(Object),
+            41,
+            expect.objectContaining({
+                archivedAt: 2000,
+                archivedByUserId: 11,
+                updatedByUserId: 11
+            })
+        )
+    })
+
+    test('restores one archived vendor business', async () => {
+        const database = createDatabase()
+        const currentVendorBusiness = {
+            vendorBusinessId: 41,
+            slug: 'coffee-beans',
+            businessName: 'Coffee Beans',
+            legalName: null,
+            summary: null,
+            description: null,
+            email: null,
+            phone: null,
+            websiteUrl: null,
+            approvalStatus: 'approved',
+            approvalNotes: null,
+            approvedAt: 900,
+            approvedByUserId: 8,
+            rejectedAt: null,
+            rejectedByUserId: null,
+            archivedAt: 1800,
+            archivedByUserId: 4,
+            createdAt: 1000,
+            createdByUserId: 7,
+            updatedAt: 1800,
+            updatedByUserId: 4
+        }
+        const restoredVendorBusiness = {
+            ...currentVendorBusiness,
+            archivedAt: null,
+            archivedByUserId: null,
+            updatedAt: 2200,
+            updatedByUserId: 11
+        }
+        const dependencies = {
+            insertVendorBusiness: jest.fn(),
+            getVendorBusinessById: jest
+                .fn()
+                .mockResolvedValueOnce(currentVendorBusiness)
+                .mockResolvedValueOnce(restoredVendorBusiness),
+            listVendorBusinesses: jest.fn(),
+            updateVendorBusinessById: jest.fn(async () => restoredVendorBusiness),
+            insertVendorBusinessOwner: jest.fn(),
+            listVendorBusinessOwnersByVendorBusinessId: jest.fn(async () => []),
+            listVendorBusinessOwnershipsByUserId: jest.fn(),
+            deleteVendorBusinessOwner: jest.fn(),
+            getVendorProductCategoryById: jest.fn(),
+            insertVendorBusinessProductCategory: jest.fn(),
+            listVendorBusinessProductCategoriesByVendorBusinessId: jest.fn(async () => []),
+            deleteVendorBusinessProductCategoriesByVendorBusinessId: jest.fn()
+        }
+        const service = createMarketOpsVendorBusinessService(database, dependencies)
+
+        await service.restoreVendorBusiness(41, {
+            updatedByUserId: 11
+        })
+
+        expect(dependencies.updateVendorBusinessById).toHaveBeenCalledWith(
+            expect.any(Object),
+            41,
+            expect.objectContaining({
+                archivedAt: null,
+                archivedByUserId: null,
                 updatedByUserId: 11
             })
         )

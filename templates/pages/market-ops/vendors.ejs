@@ -1,7 +1,10 @@
 <%
     const pageData = marketOpsVendorsPageData || {}
     const vendorCards = Array.isArray(pageData.vendorCards) ? pageData.vendorCards : []
+    const statusOptions = Array.isArray(pageData.statusOptions) ? pageData.statusOptions : []
 %>
+
+<link rel="stylesheet" href="/plugin-assets/ws_plugin_market_ops/styles/market-ops.css" />
 
 <div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3 mb-4">
     <div>
@@ -14,7 +17,83 @@
 
 <%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash: pageData.flash }) %>
 
-<div class="row g-3">
+<section class="row g-3 mb-4">
+    <div class="col-12 col-xxl-8">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex flex-column flex-lg-row align-items-lg-start justify-content-between gap-3 mb-3">
+                    <div>
+                        <h2 class="h5 mb-0">Find a Vendor</h2>
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="small text-body-secondary" data-market-ops-vendor-results-count>
+                            <%= vendorCards.length %> vendor<%= vendorCards.length === 1 ? '' : 's' %>
+                        </div>
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary btn-sm"
+                            data-market-ops-vendor-clear
+                        >
+                            Clear Filters
+                        </button>
+                    </div>
+                </div>
+                <div class="market-ops-vendor-directory-filter">
+                    <div class="mb-3">
+                        <label class="form-label" for="market-ops-vendor-search">Search Vendors</label>
+                        <input
+                            id="market-ops-vendor-search"
+                            class="form-control"
+                            type="search"
+                            placeholder="Search by business name"
+                            data-market-ops-vendor-search
+                        />
+                    </div>
+                    <% if (statusOptions.length > 0) { %>
+                        <div class="d-flex flex-column flex-lg-row align-items-lg-start justify-content-between gap-3">
+                            <div>
+                                <div class="form-label mb-1">Statuses</div>
+                                <div class="small text-body-secondary" data-market-ops-vendor-status-summary>
+                                    All statuses
+                                </div>
+                            </div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-primary btn-sm"
+                                    data-market-ops-vendor-open-status-modal
+                                >
+                                    Filter Statuses
+                                </button>
+                            </div>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div
+    class="card mb-3 market-ops-vendor-directory-empty-state d-none"
+    data-market-ops-vendor-empty-state
+>
+    <div class="card-body">
+        <div class="fw-semibold mb-2">No vendors match those filters.</div>
+        <p class="text-body-secondary mb-3">
+            Try clearing the search box or removing one or more statuses.
+        </p>
+        <button
+            type="button"
+            class="btn btn-outline-secondary btn-sm"
+            data-market-ops-vendor-empty-clear
+        >
+            Clear Filters
+        </button>
+    </div>
+</div>
+
+<div class="row g-3" data-market-ops-vendor-results>
     <% if (vendorCards.length === 0) { %>
         <div class="col-12">
             <div class="card">
@@ -27,19 +106,27 @@
     <% vendorCards.forEach((vendorCard) => { %>
         <%
             const vendorApprovalStatus = vendorCard.approvalStatus || 'pending'
+            const vendorStatusValue = vendorCard.isArchived ? 'archived' : vendorApprovalStatus
             const approvalStatusBadgeClass =
-                vendorApprovalStatus === 'approved'
+                vendorStatusValue === 'archived'
+                    ? 'text-bg-dark'
+                    : vendorApprovalStatus === 'approved'
                     ? 'text-bg-success'
                     : vendorApprovalStatus === 'rejected'
                       ? 'text-bg-danger'
                       : 'text-bg-secondary'
         %>
-        <div class="col-12 col-xxl-8">
+        <div
+            class="col-12 col-xxl-8 market-ops-vendor-directory-item"
+            data-market-ops-vendor-item
+            data-business-name="<%= vendorCard.searchBusinessName %>"
+            data-status="<%= vendorStatusValue %>"
+        >
             <a class="card text-decoration-none text-reset h-100" href="/market-ops/vendors/<%= vendorCard.vendorBusinessId %>">
                 <div class="card-body">
                     <div class="d-flex align-items-center justify-content-between gap-3 mb-2">
                         <h2 class="h5 mb-0"><%= vendorCard.businessName %></h2>
-                        <span class="badge <%= approvalStatusBadgeClass %> text-uppercase"><%= vendorApprovalStatus %></span>
+                        <span class="badge <%= approvalStatusBadgeClass %> text-uppercase"><%= vendorStatusValue %></span>
                     </div>
                     <% if (vendorCard.categoryLabels.length > 0) { %>
                         <div class="d-flex flex-wrap gap-2 mb-2">
@@ -48,9 +135,11 @@
                             <% }) %>
                         </div>
                     <% } %>
-                    <% if (vendorApprovalStatus !== 'approved') { %>
+                    <% if (vendorStatusValue !== 'approved') { %>
                         <p class="text-body-secondary mb-0">
-                            <%= vendorCard.approvalNotes || 'Open this record to review the full vendor profile and set approval notes.' %>
+                            <%= vendorCard.approvalNotes || (vendorStatusValue === 'archived'
+                                ? 'This vendor business is archived and hidden from public vendor discovery.'
+                                : 'Open this record to review the full vendor profile and set approval notes.') %>
                         </p>
                     <% } %>
                 </div>
@@ -58,3 +147,67 @@
         </div>
     <% }) %>
 </div>
+
+<% if (statusOptions.length > 0) { %>
+    <div
+        class="modal fade"
+        id="marketOpsVendorStatusModal"
+        tabindex="-1"
+        aria-labelledby="marketOpsVendorStatusModalLabel"
+        aria-hidden="true"
+        data-market-ops-vendor-status-modal
+    >
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h2 class="modal-title h5 mb-1" id="marketOpsVendorStatusModalLabel">
+                            Filter by Status
+                        </h2>
+                        <p class="text-body-secondary small mb-0">
+                            If you check more than one status, vendors matching any selected status will be shown.
+                        </p>
+                        <p class="text-body-secondary small mb-0">
+                            Clearing all selections will show all vendors.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close"
+                    ></button>
+                </div>
+                <div class="modal-body">
+                    <div class="market-ops-vendor-directory-category-grid market-ops-vendor-directory-category-grid-modal">
+                        <% statusOptions.forEach((statusOption) => { %>
+                            <label class="market-ops-vendor-directory-category-option">
+                                <input
+                                    class="form-check-input mt-0"
+                                    type="checkbox"
+                                    value="<%= statusOption.value %>"
+                                    data-market-ops-vendor-status
+                                />
+                                <span><%= statusOption.label %></span>
+                            </label>
+                        <% }) %>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button
+                        type="button"
+                        class="btn btn-outline-secondary"
+                        data-market-ops-vendor-clear
+                    >
+                        Clear
+                    </button>
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                        Done
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+<% } %>
+
+<script src="/plugin-assets/ws_plugin_market_ops/scripts/market-ops-vendors.js"></script>

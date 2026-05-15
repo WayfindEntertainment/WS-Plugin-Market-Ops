@@ -295,6 +295,8 @@ describe('createMarketOpsVendorsRouter', () => {
             expect.arrayContaining([
                 '/:vendorSlug/manage',
                 '/:vendorSlug/manage/resubmit',
+                '/:vendorSlug/manage/archive',
+                '/:vendorSlug/manage/restore',
                 '/:vendorSlug/manage/applications',
                 '/:vendorSlug/manage/applications/:vendorApplicationId',
                 '/:vendorSlug/manage/applications/:vendorApplicationId/submit',
@@ -439,6 +441,8 @@ describe('createMarketOpsVendorsRouter', () => {
             body: {
                 slug: 'approved-shop',
                 businessName: 'Approved Shop',
+                legalName: 'Scott Lassiter',
+                phone: '7139069917',
                 productCategoryIds: ['8', '3', '5']
             },
             user: { user_id: 12, permissions: [] }
@@ -463,7 +467,62 @@ describe('createMarketOpsVendorsRouter', () => {
         expect(next).not.toHaveBeenCalled()
     })
 
-    test('approved public profile exposes manage CTA only to owners or admins', async () => {
+    test('new vendor creation auto-suffixes duplicate generated slugs', async () => {
+        const router = createRouterRecorder()
+        const sdk = createSdk(router)
+        const vendorBusinessService = {
+            listVendorBusinessDetails: jest.fn(async () => [
+                {
+                    vendorBusiness: {
+                        vendorBusinessId: 1,
+                        slug: 'wayfind-entertainment-llc',
+                        businessName: 'Wayfind Entertainment LLC',
+                        approvalStatus: 'approved'
+                    }
+                }
+            ]),
+            createVendorBusiness: jest.fn(async (input) => ({
+                vendorBusiness: {
+                    slug: input.vendorBusiness.slug
+                }
+            }))
+        }
+
+        createMarketOpsNewVendorsRouter(sdk, { vendorBusinessService })
+
+        const route = router.records.post.find((entry) => entry.path === '/')
+        const req = {
+            body: {
+                slug: '',
+                businessName: 'Wayfind Entertainment LLC',
+                legalName: 'Scott Lassiter',
+                phone: '7139069917'
+            },
+            user: { user_id: 12, permissions: [] }
+        }
+        const res = {
+            status: jest.fn().mockReturnThis(),
+            redirect: jest.fn()
+        }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(vendorBusinessService.createVendorBusiness).toHaveBeenCalledWith(
+            expect.objectContaining({
+                vendorBusiness: expect.objectContaining({
+                    slug: 'wayfind-entertainment-llc-2'
+                })
+            })
+        )
+        expect(res.redirect).toHaveBeenCalledWith(
+            303,
+            '/vendors/wayfind-entertainment-llc-2/manage?notice=vendor-business-created'
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('approved public profile exposes manage CTA only to owners or users with vendor-manage access', async () => {
         const router = createRouterRecorder()
         const renderPage = jest.fn()
         const sdk = createSdk(router, renderPage)
@@ -615,7 +674,7 @@ describe('createMarketOpsVendorsRouter', () => {
         await route.handlers.at(-1)(
             {
                 params: { vendorSlug: 'approved-shop' },
-                user: { user_id: 77, permissions: ['admin.access'] }
+                user: { user_id: 77, permissions: ['ws_plugin_market_ops.vendor.manage'] }
             },
             res,
             next
@@ -684,6 +743,152 @@ describe('createMarketOpsVendorsRouter', () => {
                 selections: []
             })
         )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('public directory and profile exclude archived vendor businesses', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage)
+        const vendorBusinessService = {
+            listVendorBusinessDetails: jest.fn(async () => [
+                {
+                    vendorBusiness: {
+                        vendorBusinessId: 3,
+                        slug: 'archived-approved-shop',
+                        businessName: 'Archived Approved Shop',
+                        approvalStatus: 'approved',
+                        archivedAt: 2000,
+                        summary: 'Should be hidden'
+                    },
+                    productCategoryAssignments: [],
+                    owners: [{ userId: 12 }]
+                }
+            ])
+        }
+
+        createMarketOpsVendorsRouter(sdk, { vendorBusinessService })
+
+        const directoryRoute = router.records.get.find((entry) => entry.path === '/')
+        const profileRoute = router.records.get.find((entry) => entry.path === '/:vendorSlug')
+        const res = { status: jest.fn().mockReturnThis() }
+        const next = jest.fn()
+
+        await directoryRoute.handlers.at(-1)({ query: {} }, res, next)
+
+        expect(
+            renderPage.mock.calls[0][2].locals.marketOpsVendorDirectoryPageData.vendorCards
+        ).toEqual([])
+
+        renderPage.mockClear()
+
+        await profileRoute.handlers.at(-1)(
+            {
+                params: { vendorSlug: 'archived-approved-shop' },
+                query: {}
+            },
+            res,
+            next
+        )
+
+        expect(renderPage).toHaveBeenCalledWith(
+            expect.any(Object),
+            expect.any(Object),
+            expect.objectContaining({
+                page: 'pages/market-ops/not-found'
+            })
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('vendor manage page allows non-owner users with vendor-manage permission', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const database = {
+            query: jest.fn(async () => [[]]),
+            withTransaction: jest.fn()
+        }
+        const sdk = createSdk(router, renderPage, database)
+        const vendorDetail = {
+            vendorBusiness: {
+                vendorBusinessId: 3,
+                slug: 'approved-shop',
+                businessName: 'Approved Shop',
+                approvalStatus: 'approved',
+                archivedAt: null
+            },
+            owners: [{ userId: 12 }],
+            productCategoryAssignments: []
+        }
+        const vendorBusinessService = {
+            listVendorBusinessDetails: jest.fn(async () => [vendorDetail])
+        }
+        const applicationService = {
+            listVendorMarketApplicationsByVendorBusinessId: jest.fn(async () => [])
+        }
+
+        createMarketOpsVendorsRouter(sdk, { vendorBusinessService, applicationService })
+
+        const route = router.records.get.find((entry) => entry.path === '/:vendorSlug/manage')
+        const req = {
+            params: { vendorSlug: 'approved-shop' },
+            query: {},
+            user: { user_id: 77, permissions: ['ws_plugin_market_ops.vendor.manage'] }
+        }
+        const res = { status: jest.fn().mockReturnThis() }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(renderPage).toHaveBeenCalledWith(
+            req,
+            res,
+            expect.objectContaining({
+                page: 'pages/vendors/manage'
+            })
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('new-vendors keeps archived owned businesses visible', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage)
+        const vendorBusinessService = {
+            listVendorBusinessesByOwnerUserId: jest.fn(async () => [
+                {
+                    vendorBusiness: {
+                        vendorBusinessId: 3,
+                        slug: 'archived-shop',
+                        businessName: 'Archived Shop',
+                        approvalStatus: 'approved',
+                        archivedAt: 2000
+                    },
+                    owners: [{ userId: 12 }],
+                    productCategoryAssignments: []
+                }
+            ])
+        }
+
+        createMarketOpsNewVendorsRouter(sdk, { vendorBusinessService })
+
+        const route = router.records.get.find((entry) => entry.path === '/')
+        const req = { query: {}, user: { user_id: 12, permissions: [] } }
+        const res = { status: jest.fn().mockReturnThis() }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(
+            renderPage.mock.calls[0][2].locals.marketOpsNewVendorsPageData.ownedBusinesses
+        ).toEqual([
+            expect.objectContaining({
+                vendorBusiness: expect.objectContaining({
+                    slug: 'archived-shop',
+                    archivedAt: 2000
+                })
+            })
+        ])
         expect(next).not.toHaveBeenCalled()
     })
 
@@ -1016,6 +1221,8 @@ describe('createMarketOpsVendorsRouter', () => {
             body: {
                 slug: 'approved-shop',
                 businessName: 'Approved Shop',
+                legalName: 'Scott Lassiter',
+                phone: '7139069917',
                 productCategoryIds: ['8', '3', '2']
             },
             user: { user_id: 12, permissions: [] }
@@ -1037,6 +1244,194 @@ describe('createMarketOpsVendorsRouter', () => {
                     { vendorProductCategoryId: 2 }
                 ]
             })
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('manage save renders a friendly message for duplicate vendor slugs', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage)
+        const vendorDetail = {
+            vendorBusiness: {
+                vendorBusinessId: 3,
+                slug: 'approved-shop',
+                businessName: 'Approved Shop',
+                approvalStatus: 'approved'
+            },
+            owners: [{ userId: 12 }],
+            productCategoryAssignments: [
+                {
+                    vendorBusinessId: 3,
+                    vendorProductCategoryId: 2,
+                    sortOrder: 0,
+                    category: {
+                        vendorProductCategoryId: 2,
+                        label: 'Art Prints',
+                        isActive: 1
+                    }
+                }
+            ]
+        }
+        const vendorBusinessService = {
+            listVendorBusinessDetails: jest.fn(async () => [vendorDetail]),
+            updateVendorBusiness: jest.fn(async () => {
+                const err = new Error(
+                    "Duplicate entry 'wayfind-entertainment-llc' for key 'market_ops_vendor_businesses.uk_market_ops_vendor_businesses_slug'"
+                )
+                err.code = 'ER_DUP_ENTRY'
+                err.sqlMessage =
+                    "Duplicate entry 'wayfind-entertainment-llc' for key 'market_ops_vendor_businesses.uk_market_ops_vendor_businesses_slug'"
+                throw err
+            })
+        }
+
+        createMarketOpsVendorsRouter(sdk, {
+            vendorBusinessService,
+            applicationService: {
+                listVendorMarketApplicationsByVendorBusinessId: jest.fn(async () => [])
+            }
+        })
+
+        const route = router.records.post.find((entry) => entry.path === '/:vendorSlug/manage')
+        const req = {
+            params: { vendorSlug: 'approved-shop' },
+            body: {
+                slug: 'wayfind-entertainment-llc',
+                businessName: 'Approved Shop',
+                legalName: 'Scott Lassiter',
+                phone: '7139069917'
+            },
+            user: { user_id: 12, permissions: [] }
+        }
+        const res = {
+            status: jest.fn().mockReturnThis(),
+            redirect: jest.fn()
+        }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(renderPage).toHaveBeenCalledWith(
+            req,
+            res,
+            expect.objectContaining({
+                locals: expect.objectContaining({
+                    marketOpsVendorManagePageData: expect.objectContaining({
+                        flash: expect.objectContaining({
+                            type: 'danger',
+                            message:
+                                'That business link is already being used. Please choose a different slug.'
+                        })
+                    })
+                })
+            })
+        )
+        expect(res.redirect).not.toHaveBeenCalled()
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('manage archive route archives the business and redirects with a success notice', async () => {
+        const router = createRouterRecorder()
+        const sdk = createSdk(router)
+        const vendorDetail = {
+            vendorBusiness: {
+                vendorBusinessId: 3,
+                slug: 'approved-shop',
+                businessName: 'Approved Shop',
+                approvalStatus: 'approved',
+                archivedAt: null
+            },
+            owners: [{ userId: 12 }],
+            productCategoryAssignments: []
+        }
+        const vendorBusinessService = {
+            listVendorBusinessDetails: jest.fn(async () => [vendorDetail]),
+            archiveVendorBusiness: jest.fn(async () => vendorDetail)
+        }
+
+        createMarketOpsVendorsRouter(sdk, {
+            vendorBusinessService,
+            applicationService: {
+                listVendorMarketApplicationsByVendorBusinessId: jest.fn(async () => [])
+            }
+        })
+
+        const route = router.records.post.find(
+            (entry) => entry.path === '/:vendorSlug/manage/archive'
+        )
+        const req = {
+            params: { vendorSlug: 'approved-shop' },
+            body: { archiveConfirmationName: 'Approved Shop' },
+            user: { user_id: 12, permissions: [] }
+        }
+        const res = {
+            status: jest.fn().mockReturnThis(),
+            redirect: jest.fn()
+        }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(vendorBusinessService.archiveVendorBusiness).toHaveBeenCalledWith(3, {
+            archivedByUserId: 12,
+            updatedByUserId: 12
+        })
+        expect(res.redirect).toHaveBeenCalledWith(
+            303,
+            '/vendors/approved-shop/manage?notice=vendor-business-archived'
+        )
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('manage restore route restores the business and redirects with a success notice', async () => {
+        const router = createRouterRecorder()
+        const sdk = createSdk(router)
+        const vendorDetail = {
+            vendorBusiness: {
+                vendorBusinessId: 3,
+                slug: 'archived-shop',
+                businessName: 'Archived Shop',
+                approvalStatus: 'approved',
+                archivedAt: 2000
+            },
+            owners: [{ userId: 12 }],
+            productCategoryAssignments: []
+        }
+        const vendorBusinessService = {
+            listVendorBusinessDetails: jest.fn(async () => [vendorDetail]),
+            restoreVendorBusiness: jest.fn(async () => vendorDetail)
+        }
+
+        createMarketOpsVendorsRouter(sdk, {
+            vendorBusinessService,
+            applicationService: {
+                listVendorMarketApplicationsByVendorBusinessId: jest.fn(async () => [])
+            }
+        })
+
+        const route = router.records.post.find(
+            (entry) => entry.path === '/:vendorSlug/manage/restore'
+        )
+        const req = {
+            params: { vendorSlug: 'archived-shop' },
+            body: {},
+            user: { user_id: 12, permissions: [] }
+        }
+        const res = {
+            status: jest.fn().mockReturnThis(),
+            redirect: jest.fn()
+        }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(vendorBusinessService.restoreVendorBusiness).toHaveBeenCalledWith(3, {
+            updatedByUserId: 12
+        })
+        expect(res.redirect).toHaveBeenCalledWith(
+            303,
+            '/vendors/archived-shop/manage?notice=vendor-business-restored'
         )
         expect(next).not.toHaveBeenCalled()
     })
@@ -1265,7 +1660,7 @@ describe('createMarketOpsReviewRouter', () => {
         )
     })
 
-    test('vendor review page exposes manage capability for admins and owners', async () => {
+    test('vendor review page exposes manage capability for market-ops-manage users and owners', async () => {
         const router = createRouterRecorder()
         const renderPage = jest.fn()
         const sdk = createSdk(router, renderPage)
@@ -1295,7 +1690,7 @@ describe('createMarketOpsReviewRouter', () => {
             {
                 params: { vendorBusinessId: '1' },
                 query: {},
-                user: { user_id: 88, permissions: ['admin.access'] }
+                user: { user_id: 88, permissions: ['ws_plugin_market_ops.manage'] }
             },
             res,
             next
@@ -1320,6 +1715,97 @@ describe('createMarketOpsReviewRouter', () => {
         expect(
             renderPage.mock.calls[0][2].locals.marketOpsVendorReviewPageData.canManageVendorBusiness
         ).toBe(true)
+        expect(next).not.toHaveBeenCalled()
+    })
+
+    test('review router requires Market Ops read and manage permissions', () => {
+        const router = createRouterRecorder()
+        const sdk = createSdk(router)
+
+        createMarketOpsReviewRouter(sdk, {
+            vendorBusinessService: {
+                listVendorBusinessDetails: jest.fn(async () => [])
+            }
+        })
+
+        expect(sdk.web.guards.requirePermissions).toHaveBeenCalledWith([
+            'ws_plugin_market_ops.read',
+            'ws_plugin_market_ops.manage'
+        ])
+    })
+
+    test('vendor review list includes archived businesses in page data and exposes archived as a filter status', async () => {
+        const router = createRouterRecorder()
+        const renderPage = jest.fn()
+        const sdk = createSdk(router, renderPage)
+        const vendorBusinessService = {
+            listVendorBusinessDetails: jest.fn(async () => [
+                {
+                    vendorBusiness: {
+                        vendorBusinessId: 1,
+                        slug: 'visible-shop',
+                        businessName: 'Visible Shop',
+                        approvalStatus: 'approved',
+                        archivedAt: null,
+                        approvalNotes: null
+                    },
+                    owners: [],
+                    productCategoryAssignments: []
+                },
+                {
+                    vendorBusiness: {
+                        vendorBusinessId: 2,
+                        slug: 'archived-shop',
+                        businessName: 'Archived Shop',
+                        approvalStatus: 'approved',
+                        archivedAt: 2000,
+                        approvalNotes: null
+                    },
+                    owners: [],
+                    productCategoryAssignments: []
+                }
+            ])
+        }
+
+        createMarketOpsReviewRouter(sdk, { vendorBusinessService })
+
+        const route = router.records.get.find((entry) => entry.path === '/vendors')
+        const req = {
+            query: {},
+            user: { user_id: 12, permissions: ['ws_plugin_market_ops.manage'] }
+        }
+        const res = { status: jest.fn().mockReturnThis() }
+        const next = jest.fn()
+
+        await route.handlers.at(-1)(req, res, next)
+
+        expect(renderPage.mock.calls[0][2].locals.marketOpsVendorsPageData).toEqual(
+            expect.objectContaining({
+                statusOptions: [
+                    { value: 'pending', label: 'Pending' },
+                    { value: 'approved', label: 'Approved' },
+                    { value: 'rejected', label: 'Rejected' },
+                    { value: 'archived', label: 'Archived' }
+                ],
+                vendorCards: expect.arrayContaining([
+                    expect.objectContaining({
+                        businessName: 'Visible Shop',
+                        searchBusinessName: 'visible shop',
+                        approvalStatus: 'approved',
+                        isArchived: false
+                    }),
+                    expect.objectContaining({
+                        businessName: 'Archived Shop',
+                        searchBusinessName: 'archived shop',
+                        approvalStatus: 'approved',
+                        isArchived: true
+                    })
+                ])
+            })
+        )
+        expect(vendorBusinessService.listVendorBusinessDetails).toHaveBeenCalledWith({
+            includeArchived: true
+        })
         expect(next).not.toHaveBeenCalled()
     })
 })

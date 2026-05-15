@@ -15,7 +15,10 @@
         ? pageData.upcomingAppliedMarkets
         : []
     const applicationsHref = pageData.applicationsHref || `/vendors/${vendorBusiness.slug || ''}/manage/applications`
+    const archiveAction = pageData.archiveAction || `/vendors/${vendorBusiness.slug || ''}/manage/archive`
+    const restoreAction = pageData.restoreAction || `/vendors/${vendorBusiness.slug || ''}/manage/restore`
     const vendorApprovalStatus = vendorBusiness.approvalStatus || 'pending'
+    const isArchived = vendorBusiness.archivedAt != null
     const approvalStatusBadgeClass =
         vendorApprovalStatus === 'approved'
             ? 'text-bg-success'
@@ -25,6 +28,7 @@
 %>
 
 <link rel="stylesheet" href="/plugin-assets/ws_plugin_market_ops/styles/market-ops.css" />
+<script src="/plugin-assets/ws_plugin_market_ops/scripts/unsaved-form-guard.js" defer></script>
 
 <div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3 mb-4">
     <div>
@@ -33,12 +37,24 @@
             Edit your vendor business profile and keep the approval-ready details current.
         </p>
     </div>
-    <% if (vendorBusiness.slug) { %>
+    <% if (vendorBusiness.slug && !isArchived) { %>
         <a class="btn btn-outline-primary" href="/vendors/<%= vendorBusiness.slug %>">See Public Profile</a>
     <% } %>
 </div>
 
 <%- await include('../../partials/market-ops-flash.ejs', { marketOpsFlash: pageData.flash }) %>
+
+<% if (isArchived) { %>
+    <div class="alert alert-secondary d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3">
+        <div>
+            <div class="fw-semibold mb-1">This business is archived.</div>
+            <div class="small">
+                Archived businesses are hidden from the public vendor directory until restored.
+            </div>
+        </div>
+        <span class="badge text-bg-dark text-uppercase align-self-start align-self-sm-center">Archived</span>
+    </div>
+<% } %>
 
 <section class="row g-4">
     <div class="col-12 col-xxl-8">
@@ -47,46 +63,47 @@
                 <h2 class="h5 mb-0">Vendor Business Profile</h2>
             </div>
             <div class="card-body">
-                <form action="<%= pageData.formAction %>" method="post" class="row g-3">
+                <form
+                    id="manage-vendor-business-form"
+                    action="<%= pageData.formAction %>"
+                    method="post"
+                    class="row g-3"
+                    novalidate
+                    data-manage-vendors-form
+                >
                     <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
                     <div class="col-12">
-                        <p class="small text-body-secondary mb-0">
-                            <span class="text-danger fw-semibold">*</span> Required fields
-                        </p>
+                        <div class="small fw-semibold text-uppercase text-body-secondary">
+                            Required
+                        </div>
                     </div>
                     <div class="col-12 col-md-6">
-                        <label class="form-label" for="manage-vendor-business-name">
-                            Business Name <span class="text-danger" aria-hidden="true">*</span>
-                        </label>
+                        <label class="form-label" for="manage-vendor-business-name">Business Name</label>
                         <input id="manage-vendor-business-name" class="form-control" type="text" name="businessName" value="<%= formValues.businessName || '' %>" maxlength="255" required />
                     </div>
                     <div class="col-12 col-md-6">
-                        <label class="form-label" for="manage-vendor-slug">
-                            Slug <span class="text-danger" aria-hidden="true">*</span>
-                        </label>
+                        <label class="form-label" for="manage-vendor-slug">Slug</label>
                         <input id="manage-vendor-slug" class="form-control" type="text" name="slug" value="<%= formValues.slug || '' %>" maxlength="128" required />
                         <div class="form-text">Used in the public profile URL.</div>
                     </div>
                     <div class="col-12 col-md-6">
-                        <label class="form-label" for="manage-vendor-legal-name">Legal Name</label>
-                        <input id="manage-vendor-legal-name" class="form-control" type="text" name="legalName" value="<%= formValues.legalName || '' %>" maxlength="255" />
+                        <label class="form-label" for="manage-vendor-legal-name">
+                            Owner Name (First and Last)
+                        </label>
+                        <input id="manage-vendor-legal-name" class="form-control" type="text" name="legalName" value="<%= formValues.legalName || '' %>" maxlength="255" required />
                     </div>
                     <div class="col-12 col-md-6">
-                        <label class="form-label" for="manage-vendor-email">Public Email</label>
-                        <input id="manage-vendor-email" class="form-control" type="email" name="email" value="<%= formValues.email || '' %>" maxlength="255" />
+                        <label class="form-label" for="manage-vendor-phone">Business Phone Number</label>
+                        <input id="manage-vendor-phone" class="form-control" type="text" name="phone" value="<%= formValues.phone || '' %>" maxlength="64" required />
                     </div>
-                    <div class="col-12 col-md-6">
-                        <label class="form-label" for="manage-vendor-phone">Public Phone Number</label>
-                        <input id="manage-vendor-phone" class="form-control" type="text" name="phone" value="<%= formValues.phone || '' %>" maxlength="64" />
-                        <div class="form-text">This phone number is shown publicly on your vendor profile.</div>
+                    <div class="col-12">
+                        <div class="small fw-semibold text-uppercase text-body-secondary">
+                            Optional Details
+                        </div>
                     </div>
                     <div class="col-12 col-md-6">
                         <label class="form-label" for="manage-vendor-website">Website URL</label>
                         <input id="manage-vendor-website" class="form-control" type="text" name="websiteUrl" value="<%= formValues.websiteUrl || '' %>" maxlength="255" />
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label" for="manage-vendor-summary">Tag Line</label>
-                        <textarea id="manage-vendor-summary" class="form-control" rows="2" name="summary"><%= formValues.summary || '' %></textarea>
                     </div>
                     <div class="col-12">
                         <label class="form-label" for="manage-vendor-description">Description</label>
@@ -112,7 +129,7 @@
                                 >
                                     <% selectedCategories.forEach((category, index) => { %>
                                         <article
-                                            class="admin-plugins-discover-plugin-card market-ops-sortable-card"
+                                            class="admin-plugins-discover-plugin-card market-ops-sortable-card market-ops-sortable-card-full-drag"
                                             draggable="true"
                                             data-vendor-manage-product-category-item
                                             data-vendor-product-category-id="<%= category.vendorProductCategoryId %>"
@@ -221,7 +238,7 @@
                                 </div>
                                 <template data-vendor-manage-product-category-item-template>
                                     <article
-                                        class="admin-plugins-discover-plugin-card market-ops-sortable-card"
+                                        class="admin-plugins-discover-plugin-card market-ops-sortable-card market-ops-sortable-card-full-drag"
                                         draggable="true"
                                         data-vendor-manage-product-category-item
                                     >
@@ -382,7 +399,127 @@
                 <% } %>
             </div>
         </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Business Visibility</h2>
+            </div>
+            <div class="card-body">
+                <% if (isArchived) { %>
+                    <p class="text-body-secondary mb-3">
+                        This business is currently hidden from public vendor pages.
+                    </p>
+                    <form action="<%= restoreAction %>" method="post">
+                        <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                        <button class="btn btn-outline-primary w-100" type="submit">Restore Business</button>
+                    </form>
+                <% } else { %>
+                    <p class="text-body-secondary mb-3">
+                        Archiving hides this business from the public vendor directory without deleting its history.
+                    </p>
+                    <button
+                        class="btn btn-outline-danger w-100"
+                        type="button"
+                        data-bs-toggle="modal"
+                        data-bs-target="#archive-vendor-business-modal"
+                    >
+                        Archive Business
+                    </button>
+                <% } %>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Public Contact Info</h2>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label" for="manage-vendor-email">Public Email</label>
+                        <input
+                            id="manage-vendor-email"
+                            class="form-control"
+                            type="email"
+                            name="email"
+                            value="<%= formValues.email || '' %>"
+                            maxlength="255"
+                            form="manage-vendor-business-form"
+                        />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="manage-vendor-summary">Tag Line</label>
+                        <textarea
+                            id="manage-vendor-summary"
+                            class="form-control"
+                            rows="2"
+                            name="summary"
+                            form="manage-vendor-business-form"
+                        ><%= formValues.summary || '' %></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
+
+<% if (!isArchived) { %>
+    <div
+        id="archive-vendor-business-modal"
+        class="modal fade"
+        tabindex="-1"
+        aria-labelledby="archive-vendor-business-modal-title"
+        aria-hidden="true"
+    >
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="archive-vendor-business-modal-title" class="modal-title fs-5">
+                        Archive Business
+                    </h2>
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close"
+                    ></button>
+                </div>
+                <form action="<%= archiveAction %>" method="post" data-vendor-archive-form>
+                    <div class="modal-body">
+                        <input type="hidden" name="_csrf" value="<%= ws_req.csrfToken %>" />
+                        <p class="mb-3">
+                            This will hide <strong><%= vendorBusiness.businessName %></strong> from public vendor pages. Type the business name below to confirm.
+                        </p>
+                        <label class="form-label" for="archive-vendor-confirmation-name">
+                            Business Name Confirmation
+                        </label>
+                        <input
+                            id="archive-vendor-confirmation-name"
+                            class="form-control"
+                            type="text"
+                            name="archiveConfirmationName"
+                            autocomplete="off"
+                            data-vendor-archive-confirmation-input
+                            data-vendor-archive-confirmation-expected="<%= vendorBusiness.businessName || '' %>"
+                        />
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                            Cancel
+                        </button>
+                        <button
+                            class="btn btn-danger"
+                            type="submit"
+                            data-vendor-archive-submit
+                            disabled
+                        >
+                            Archive Business
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+<% } %>
 
 <script src="/plugin-assets/ws_plugin_market_ops/scripts/vendor-manage.js"></script>

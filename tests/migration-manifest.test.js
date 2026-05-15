@@ -28,7 +28,7 @@ describe('Market Ops plugin migration manifest', () => {
     test('declares one ordered relative sql migration path per schema file on disk', async () => {
         const migrations = await readDeclaredMigrations()
 
-        expect(migrations).toHaveLength(12)
+        expect(migrations).toHaveLength(13)
 
         const seen = new Set()
         let previousPrefix = -1

@@ -1,10 +1,12 @@
 /* eslint-disable jsdoc/require-jsdoc, no-nested-ternary, prefer-destructuring */
 
+import {
+    MARKET_OPS_REVIEW_PERMISSION_CODES,
+    canManageVendorBusiness
+} from './permission-helpers.js'
 import createMarketOpsApplicationReviewService from './services/application-review-service.js'
 import createMarketOpsMarketSetupService from './services/market-setup-service.js'
 import createMarketOpsVendorBusinessService from './services/vendor-business-service.js'
-
-const MARKET_OPS_PERMISSION_CODES = ['ws_plugin_market_ops.read', 'admin.access']
 
 const VENDOR_APPROVAL_STATUS_ORDER = {
     pending: 0,
@@ -77,10 +79,6 @@ function normalizeOptionalString(value) {
     const normalizedValue = normalizeTrimmedString(value)
 
     return normalizedValue.length > 0 ? normalizedValue : null
-}
-
-function isAdminUser(req) {
-    return Array.isArray(req?.user?.permissions) && req.user.permissions.includes('admin.access')
 }
 
 function normalizePositiveIntegerField(value, fieldName, errorCode) {
@@ -279,7 +277,12 @@ function buildVendorReviewCards(details) {
         .map((detail) => ({
             vendorBusinessId: detail.vendorBusiness.vendorBusinessId,
             businessName: detail.vendorBusiness.businessName,
+            searchBusinessName: String(detail.vendorBusiness.businessName ?? '')
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, ' '),
             slug: detail.vendorBusiness.slug,
+            isArchived: detail.vendorBusiness.archivedAt != null,
             approvalStatus: detail.vendorBusiness.approvalStatus,
             approvalNotes: detail.vendorBusiness.approvalNotes,
             categoryLabels: detail.productCategoryAssignments
@@ -362,11 +365,13 @@ export function createMarketOpsReviewRouter(sdk, overrides = {}) {
         buildDependencies(normalizedSdk, overrides)
     const router = createRouter()
 
-    router.use(requireAuth, requirePermissions(MARKET_OPS_PERMISSION_CODES))
+    router.use(requireAuth, requirePermissions(MARKET_OPS_REVIEW_PERMISSION_CODES))
 
     router.get('/vendors', async (req, res, next) => {
         try {
-            const vendorDetails = await vendorBusinessService.listVendorBusinessDetails()
+            const vendorDetails = await vendorBusinessService.listVendorBusinessDetails({
+                includeArchived: true
+            })
 
             await renderPageForMarketOps(req, res, renderPage, {
                 page: 'pages/market-ops/vendors',
@@ -374,7 +379,13 @@ export function createMarketOpsReviewRouter(sdk, overrides = {}) {
                 locals: {
                     marketOpsVendorsPageData: {
                         flash: resolveNotice(req.query),
-                        vendorCards: buildVendorReviewCards(vendorDetails)
+                        vendorCards: buildVendorReviewCards(vendorDetails),
+                        statusOptions: [
+                            { value: 'pending', label: 'Pending' },
+                            { value: 'approved', label: 'Approved' },
+                            { value: 'rejected', label: 'Rejected' },
+                            { value: 'archived', label: 'Archived' }
+                        ]
                     }
                 }
             })
@@ -403,9 +414,7 @@ export function createMarketOpsReviewRouter(sdk, overrides = {}) {
                 database,
                 detail.owners.map((owner) => owner.userId)
             )
-            const currentUserId = req?.user?.user_id ?? null
-            const canManageVendorBusiness =
-                isAdminUser(req) || detail.owners.some((owner) => owner.userId === currentUserId)
+            const canManageVendorBusinessAccess = canManageVendorBusiness(req, detail)
 
             await renderPageForMarketOps(req, res, renderPage, {
                 page: 'pages/market-ops/vendor-review',
@@ -415,7 +424,7 @@ export function createMarketOpsReviewRouter(sdk, overrides = {}) {
                         flash: resolveNotice(req.query),
                         vendorDetail: detail,
                         ownerProfiles,
-                        canManageVendorBusiness,
+                        canManageVendorBusiness: canManageVendorBusinessAccess,
                         notesAction: `/market-ops/vendors/${vendorBusinessId}/notes`,
                         approveAction: `/market-ops/vendors/${vendorBusinessId}/approve`,
                         rejectAction: `/market-ops/vendors/${vendorBusinessId}/reject`

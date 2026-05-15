@@ -101,7 +101,11 @@ const marketOpsPlugin = {
         ws_plugin_market_ops: {
             description: 'Market Operations plugin capabilities.',
             permissions: {
-                'ws_plugin_market_ops.read': 'Read the Market Operations plugin surfaces.'
+                'ws_plugin_market_ops.read': 'Read the Market Operations plugin surfaces.',
+                'ws_plugin_market_ops.manage':
+                    'Manage Market Operations setup, vendor review, and application review.',
+                'ws_plugin_market_ops.vendor.manage':
+                    'Manage any vendor business without being an owner.'
             }
         }
     },
@@ -150,7 +154,8 @@ const marketOpsPlugin = {
             'migrations/009_create_market_ops_market_booth_offerings.sql',
             'migrations/010_create_market_ops_vendor_market_applications.sql',
             'migrations/011_create_market_ops_application_market_selections.sql',
-            'migrations/012_create_market_ops_application_market_booth_preferences.sql'
+            'migrations/012_create_market_ops_application_market_booth_preferences.sql',
+            'migrations/013_add_archive_fields_to_vendor_businesses.sql'
         ]
     }
 }

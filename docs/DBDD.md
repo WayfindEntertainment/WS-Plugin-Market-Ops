@@ -67,6 +67,7 @@ Canonical vendor business records.
 > - This is the primary business entity vendors create and manage.
 > - Approval is separate from market applications.
 > - Public vendor pages will route from `slug`.
+> - Businesses may be soft-archived without losing their applications or payment history.
 > - `approval_status` is expected to hold the current review state directly on the row for the
 >   launch build.
 > - One kernel user may own multiple vendor businesses through `market_ops_vendor_business_owners`.
@@ -88,6 +89,8 @@ Canonical vendor business records.
 | FK  | approved_by_user_id | `INT UNSIGNED` |          |           | Kernel user that approved the business.                           |
 |     | rejected_at         |       `BIGINT` |          |           | Epoch ms when the business was rejected.                          |
 | FK  | rejected_by_user_id | `INT UNSIGNED` |          |           | Kernel user that rejected the business.                           |
+|     | archived_at         |       `BIGINT` |          |           | Epoch ms when the business was archived/hidden from public views. |
+| FK  | archived_by_user_id | `INT UNSIGNED` |          |           | Kernel user that archived the business.                           |
 |     | created_at          |       `BIGINT` |   YES    |           | Epoch ms when the vendor business row was created.                |
 | FK  | created_by_user_id  | `INT UNSIGNED` |          |           | Optional kernel user that created the row.                        |
 |     | updated_at          |       `BIGINT` |   YES    |           | Epoch ms when the vendor business row was last updated.           |
@@ -103,11 +106,14 @@ Canonical vendor business records.
   `ON UPDATE RESTRICT`).
 - Foreign key `rejected_by_user_id` -> `kernel_users.user_id` (`ON DELETE SET NULL`,
   `ON UPDATE RESTRICT`).
+- Foreign key `archived_by_user_id` -> `kernel_users.user_id` (`ON DELETE SET NULL`,
+  `ON UPDATE RESTRICT`).
 - Foreign key `created_by_user_id` -> `kernel_users.user_id` (`ON DELETE SET NULL`,
   `ON UPDATE RESTRICT`).
 - Foreign key `updated_by_user_id` -> `kernel_users.user_id` (`ON DELETE SET NULL`,
   `ON UPDATE RESTRICT`).
 - `approval_status` is constrained to `pending`, `approved`, `rejected`.
+- Archived businesses are hidden from public discovery whenever `archived_at` is non-null.
 
 ---
 

@@ -53,6 +53,11 @@
 .market-ops-sortable-handle {
     cursor: grab;
     align-self: center;
+    touch-action: none;
+}
+
+.market-ops-sortable-card-full-drag {
+    touch-action: none;
 }
 
 .market-ops-sortable-handle:active {
